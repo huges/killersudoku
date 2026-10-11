@@ -63,11 +63,11 @@ Fuori perimetro: account, sincronizzazione cloud, multiplayer, classifiche, gene
 
 ### Desktop
 
-- Griglia e area comandi affiancate, senza sovrapposizioni.
-- Griglia prioritaria e leggibile.
-- Tastierino vicino alla griglia, utilizzabile con mouse o tastiera.
-- Comandi di partita in un’area dedicata.
-- Timer, errori, difficoltà e nuova partita facilmente individuabili.
+- Griglia, tastierino e comandi devono essere disposti in tre aree affiancate e chiaramente distinguibili, senza sovrapposizioni.
+- La griglia resta prioritaria e leggibile; il tastierino è adiacente alla griglia e l’area comandi è adiacente al tastierino o alla griglia secondo lo spazio disponibile.
+- Il tastierino deve essere utilizzabile con mouse o tastiera e non deve ridurre la leggibilità della griglia.
+- I comandi di partita devono restare in un’area dedicata, con timer, errori, difficoltà e nuova partita facilmente individuabili.
+- La disposizione a tre aree affiancate è una decisione proposta per rendere espliciti ordine, posizione e raggiungibilità dei controlli desktop.
 
 ### Mobile
 
@@ -82,21 +82,21 @@ L’incremento UI dovrà verificare esplicitamente ordine, posizione, dimensiona
 
 ## Matrice proposta dei componenti
 
-| Componente | Decisione proposta | Mantenere | Adattare o creare | Incremento previsto |
-|---|---|---|---|---|
-| Griglia 9×9 | Adattare | Struttura 9×9 e selezione cella | Confini delle gabbie, bordi tratteggiati, etichette e stato Killer | UI |
-| Tastierino e input | Adattare | Tasti 1–9, cancellazione, annotazioni e input da tastiera | Feedback per conflitti Sudoku, somma non valida e duplicati nella gabbia; mouse, tocco e tastiera fisica | UI/motore |
-| Selezione e feedback cella | Adattare | Selezione riconoscibile | Distinzione tra conflitto Sudoku, duplicato nella gabbia e somma non valida | Motore/UI |
-| Evidenziazione riga/colonna/regione | Creare o adattare | Nulla della baseline dichiarata | Evidenziazione proposta, da valutare separatamente | UI successiva |
-| Comandi di gioco | Adattare | Difficoltà, nuova partita, timer e contatore errori | Accesso alle regole e stato partita; annulla/ripristina in seguito | UI |
-| Layout responsive | Adattare o creare | Nessun comportamento verificato direttamente | Desktop affiancato; mobile con griglia sopra tastierino e comandi separati | UI |
-| Modello puzzle e gabbie | Creare o estendere | Decisione tecnica da determinare dopo analisi | Griglia, coordinate, valori iniziali/utente, annotazioni, gabbie e somme; configurazione iniziale immutabile | Modello |
-| Motore di validazione | Creare o estendere | Decisione tecnica da determinare dopo analisi | Regole Sudoku, contiguità, copertura, non sovrapposizione, somme e divieto assoluto di duplicati | Motore |
-| Annotazioni | Mantenere e adattare | Annotazioni della baseline | Non trattarle come cifre definitive nella validazione | UI/motore |
-| Persistenza locale | Creare | Nessun comportamento verificato direttamente | Salvare/ripristinare stato utente senza modificare dati iniziali o gabbie | Incremento successivo |
-| Annulla/ripristina | Creare o adattare | Nessun comportamento verificato direttamente | Operare sulle modifiche utente, incluse annotazioni, senza modificare dati iniziali | Incremento successivo |
+| Componente | Decisione proposta | Motivazione | Mantenere | Adattare o creare | Riferimenti ispezionati | Incremento previsto |
+|---|---|---|---|---|---|---|
+| Griglia 9×9 | Adattare | Conserva la struttura della baseline e aggiunge la rappresentazione visiva delle gabbie senza cambiare la griglia Sudoku. | Struttura 9×9 e selezione cella | Confini delle gabbie, bordi tratteggiati, etichette e stato Killer | Nessuno: non sono stati ispezionati file sorgente o immagini | UI |
+| Tastierino e input | Adattare | Riutilizza i modi di inserimento dichiarati e li estende ai feedback specifici dei vincoli Killer. | Tasti 1–9, cancellazione, annotazioni e input da tastiera | Feedback per conflitti Sudoku, somma non valida e duplicati nella gabbia; mouse, tocco e tastiera fisica | Nessuno: non sono stati ispezionati file sorgente o immagini | UI/motore |
+| Selezione e feedback cella | Adattare | Mantiene la selezione necessaria per l’inserimento e rende distinguibili gli errori introdotti dalle nuove regole. | Selezione riconoscibile | Distinzione tra conflitto Sudoku, duplicato nella gabbia e somma non valida | Nessuno: non sono stati ispezionati file sorgente o immagini | Motore/UI |
+| Evidenziazione riga/colonna/regione | Creare o adattare | È una funzionalità proposta e non appartiene alla baseline dichiarata; va quindi valutata separatamente. | Nulla della baseline dichiarata | Evidenziazione proposta, da valutare separatamente | Nessuno: non sono stati ispezionati file sorgente o immagini | UI successiva |
+| Comandi di gioco | Adattare | Mantiene il flusso di partita dichiarato e prepara l’accesso alle regole e allo stato Killer. | Difficoltà, nuova partita, timer e contatore errori | Accesso alle regole e stato partita; annulla/ripristina in seguito | Nessuno: non sono stati ispezionati file sorgente o immagini | UI |
+| Layout responsive | Adattare o creare | La disposizione deve rendere griglia, tastierino e comandi utilizzabili nei diversi formati, senza sovrapposizioni. | Nessun comportamento verificato direttamente | Desktop con tre aree affiancate; mobile con griglia sopra tastierino e comandi separati | Nessuno: schermate desktop e mobile dichiarate dall’operatore, ma non ispezionate | UI |
+| Modello puzzle e gabbie | Creare o estendere | Servono invarianti espliciti che la baseline Sudoku non copre: copertura completa, contiguità e non sovrapposizione. | Decisione tecnica da determinare dopo analisi | Griglia, coordinate, valori iniziali/utente, annotazioni, gabbie e somme; configurazione iniziale immutabile | Nessuno: non sono stati ispezionati file sorgente o immagini | Modello |
+| Motore di validazione | Creare o estendere | Le regole Killer richiedono controlli coordinati oltre alla validazione Sudoku classica. | Decisione tecnica da determinare dopo analisi | Regole Sudoku, contiguità, copertura, non sovrapposizione, somme e divieto assoluto di duplicati | Nessuno: non sono stati ispezionati file sorgente o immagini | Motore |
+| Annotazioni | Mantenere e adattare | Preserva la funzionalità dichiarata evitando che le note interferiscano con la validazione delle cifre inserite. | Annotazioni della baseline | Non trattarle come cifre definitive nella validazione | Nessuno: non sono stati ispezionati file sorgente o immagini | UI/motore |
+| Persistenza locale | Creare | È necessaria per conservare lo stato utente, ma appartiene alla roadmap successiva e non a M0-1. | Nessun comportamento verificato direttamente | Salvare/ripristinare stato utente senza modificare dati iniziali o gabbie | Nessuno: non sono stati ispezionati file sorgente o immagini | Incremento successivo |
+| Annulla/ripristina | Creare o adattare | Richiede uno storico delle modifiche non presente nel perimetro documentale M0-1. | Nessun comportamento verificato direttamente | Operare sulle modifiche utente, incluse annotazioni, senza modificare dati iniziali | Nessuno: non sono stati ispezionati file sorgente o immagini | Incremento successivo |
 
-Il riuso effettivo del codice non è verificato e non viene dichiarato. Non risultano riferimenti sorgente o visivi ispezionati direttamente da Mozart.
+Il riuso effettivo del codice non è verificato e non viene dichiarato. I riferimenti indicati nella matrice sono quindi esplicitamente “nessuno” per ogni riga.
 
 ## Assegnazione alla roadmap
 
