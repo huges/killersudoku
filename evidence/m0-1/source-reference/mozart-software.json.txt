@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "profile": "web-game",
+  "title": "Sudoku",
+  "entrypoint": "index.html",
+  "source_files": [
+    "index.html",
+    "css/styles.css",
+    "js/sudoku-core.js",
+    "js/app.js"
+  ],
+  "test_files": [
+    "tests/sudoku-core.test.js"
+  ],
+  "asset_files": []
+}

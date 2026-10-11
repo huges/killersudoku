@@ -1,0 +1,40 @@
+{
+  "source_repository": "https://github.com/huges/project-sudoku",
+  "source_commit": "936db02e8f9b205db67915254306f5575db77945",
+  "destination_repository": "https://github.com/huges/killersudoku",
+  "status": "pending_gate_review",
+  "screenshots": [
+    {
+      "path": "evidence/m0-1/screenshots/mobile-top.png",
+      "source_attachment": "01-38625.png",
+      "image_pixels": [
+        684,
+        1536
+      ],
+      "sha256": "7230891db34b69947cb9d2687be8e0902c57e15faaded77620b007e710c3b280",
+      "css_viewport": null
+    },
+    {
+      "path": "evidence/m0-1/screenshots/mobile-controls.png",
+      "source_attachment": "02-38626.png",
+      "image_pixels": [
+        684,
+        1536
+      ],
+      "sha256": "69842bcb6b0dad510c505f324c0b4d5e4eda26e33e3b147f11c8c7ea17b7d5fe",
+      "css_viewport": null
+    },
+    {
+      "path": "evidence/m0-1/screenshots/desktop.png",
+      "source_attachment": "image(20261011-111909).png",
+      "image_pixels": [
+        2048,
+        1472
+      ],
+      "sha256": "ccfca1b2d2c2d701783c53cd191a6e48f9b82c94aed38bedc7e791f87607620d",
+      "css_viewport": null
+    }
+  ],
+  "source_snapshot_scope": "Seven pinned text files, not a complete repository",
+  "test_evidence": "Operator terminal: Sudoku core tests passed; 2026-10-11 around 13:08 Europe/Rome"
+}

@@ -1,0 +1,115 @@
+'use strict';
+
+var assert = require('assert');
+var Sudoku = require('../js/sudoku-core.js');
+
+function seeded(seed) {
+  var value = seed >>> 0;
+  return function () {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
+
+function countClues(grid) {
+  return grid.reduce(function (total, row) {
+    return total + row.filter(function (value) { return value !== 0; }).length;
+  }, 0);
+}
+
+function emptyState(game) {
+  return {
+    puzzle: game.puzzle,
+    solution: game.solution,
+    fixed: game.fixed,
+    values: game.puzzle.map(function (row) { return row.slice(); }),
+    notes: game.puzzle.map(function (row) {
+      return row.map(function () { return new Set(); });
+    }),
+    status: 'playing'
+  };
+}
+
+var game = Sudoku.createPuzzle({ difficulty: 'medium', rng: seeded(42) });
+assert.strictEqual(game.puzzle.length, 9);
+assert.strictEqual(game.solution.length, 9);
+assert(game.puzzle.every(function (row) { return row.length === 9; }));
+assert(game.solution.every(function (row) { return row.length === 9; }));
+assert(Sudoku.isValidGrid(game.solution));
+assert(Sudoku.isValidGrid(game.puzzle));
+
+function assertUnitValid(values) {
+  assert.strictEqual(values.length, 9);
+  assert.strictEqual(new Set(values).size, 9);
+  values.forEach(function (value) { assert(Sudoku.isValidValue(value)); });
+}
+
+for (var unit = 0; unit < 9; unit++) {
+  assertUnitValid(game.solution[unit]);
+  assertUnitValid(game.solution.map(function (line) { return line[unit]; }));
+}
+for (var boxRow = 0; boxRow < 9; boxRow += 3) {
+  for (var boxCol = 0; boxCol < 9; boxCol += 3) {
+    var box = [];
+    for (var boxR = boxRow; boxR < boxRow + 3; boxR++) {
+      for (var boxC = boxCol; boxC < boxCol + 3; boxC++) box.push(game.solution[boxR][boxC]);
+    }
+    assertUnitValid(box);
+  }
+}
+
+for (var row = 0; row < 9; row++) {
+  for (var col = 0; col < 9; col++) {
+    assert(Sudoku.isValidPlacement(game.solution, row, col, game.solution[row][col]));
+  }
+}
+
+[0, 10, -1, 1.5, '4', null, NaN].forEach(function (value) {
+  assert.strictEqual(Sudoku.isValidValue(value), false);
+});
+for (var valid = 1; valid <= 9; valid++) assert.strictEqual(Sudoku.isValidValue(valid), true);
+
+assert.strictEqual(countClues(game.puzzle), Sudoku.GIVEN_COUNTS.medium);
+assert(game.fixed.some(function (line) { return line.some(Boolean); }));
+assert(game.fixed.some(function (line) { return line.some(function (fixed) { return !fixed; }); }));
+assert(Sudoku.isCompleteSolution(game.solution, game.solution, game.fixed));
+
+var incomplete = game.solution.map(function (line) { return line.slice(); });
+incomplete[0][0] = 0;
+assert.strictEqual(Sudoku.isCompleteSolution(incomplete, game.solution, game.fixed), false);
+
+var incorrect = game.solution.map(function (line) { return line.slice(); });
+var swap = incorrect[0][0];
+incorrect[0][0] = incorrect[0][1];
+incorrect[0][1] = swap;
+assert.strictEqual(Sudoku.isCompleteSolution(incorrect, game.solution, game.fixed), false);
+
+var state = emptyState(game);
+var fixedCell = null;
+var editableCell = null;
+for (row = 0; row < 9; row++) for (var col = 0; col < 9; col++) {
+  if (game.fixed[row][col] && !fixedCell) fixedCell = { row: row, col: col };
+  if (!game.fixed[row][col] && !editableCell) editableCell = { row: row, col: col };
+}
+assert(fixedCell && editableCell);
+assert.strictEqual(Sudoku.setValue(state, fixedCell.row, fixedCell.col, 1), state);
+assert.strictEqual(Sudoku.clearValue(state, fixedCell.row, fixedCell.col), state);
+assert.strictEqual(Sudoku.toggleNote(state, fixedCell.row, fixedCell.col, 1), state);
+assert.strictEqual(Sudoku.setValue(state, editableCell.row, editableCell.col, 0), state);
+assert.strictEqual(Sudoku.setValue(state, editableCell.row, editableCell.col, 10), state);
+var changed = Sudoku.setValue(state, editableCell.row, editableCell.col, game.solution[editableCell.row][editableCell.col]);
+assert.strictEqual(changed.values[editableCell.row][editableCell.col], game.solution[editableCell.row][editableCell.col]);
+var noted = Sudoku.toggleNote(changed, editableCell.row, editableCell.col, 1);
+assert(noted.notes[editableCell.row][editableCell.col].has(1));
+var clearedNote = Sudoku.toggleNote(noted, editableCell.row, editableCell.col, 1);
+assert(!clearedNote.notes[editableCell.row][editableCell.col].has(1));
+
+['easy', 'medium', 'hard', 'expert'].forEach(function (difficulty, index) {
+  var generated = Sudoku.createPuzzle({ difficulty: difficulty, rng: seeded(100 + index) });
+  assert.strictEqual(countClues(generated.puzzle), Sudoku.GIVEN_COUNTS[difficulty]);
+  assert(Sudoku.isValidGrid(generated.puzzle));
+  assert(Sudoku.isValidGrid(generated.solution));
+  assert(generated.fixed.some(function (line) { return line.some(function (fixed) { return !fixed; }); }));
+});
+
+console.log('Sudoku core tests passed.');

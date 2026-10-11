@@ -1,0 +1,118 @@
+/* Pure Sudoku rules and state transitions. No DOM or browser APIs. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.SudokuCore = factory();
+}(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var GIVEN_COUNTS = { easy: 40, medium: 32, hard: 26, expert: 22 };
+  var LEVELS = Object.keys(GIVEN_COUNTS);
+
+  function isValidValue(value) { return Number.isInteger(value) && value >= 1 && value <= 9; }
+  function validShape(grid) { return Array.isArray(grid) && grid.length === 9 && grid.every(function (row) { return Array.isArray(row) && row.length === 9; }); }
+  function copyGrid(grid) { return grid.map(function (row) { return row.slice(); }); }
+  function emptyGrid() { return Array.from({ length: 9 }, function () { return Array(9).fill(0); }); }
+  function unitValid(values) {
+    var seen = {};
+    return values.every(function (value) {
+      if (value === 0) return true;
+      if (!isValidValue(value) || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    });
+  }
+  function isValidGrid(grid) {
+    if (!validShape(grid)) return false;
+    for (var i = 0; i < 9; i++) {
+      if (!unitValid(grid[i]) || !unitValid(grid.map(function (row) { return row[i]; }))) return false;
+    }
+    for (var br = 0; br < 9; br += 3) for (var bc = 0; bc < 9; bc += 3) {
+      var box = [];
+      for (var r = br; r < br + 3; r++) for (var c = bc; c < bc + 3; c++) box.push(grid[r][c]);
+      if (!unitValid(box)) return false;
+    }
+    return true;
+  }
+  function shuffled(values, rng) {
+    var result = values.slice();
+    for (var i = result.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var temp = result[i]; result[i] = result[j]; result[j] = temp;
+    }
+    return result;
+  }
+  function generateSolution(rng) {
+    rng = rng || Math.random;
+    var grid = emptyGrid();
+    function allowed(row, col, value) {
+      for (var i = 0; i < 9; i++) if (grid[row][i] === value || grid[i][col] === value) return false;
+      var top = Math.floor(row / 3) * 3, left = Math.floor(col / 3) * 3;
+      for (var r = top; r < top + 3; r++) for (var c = left; c < left + 3; c++) if (grid[r][c] === value) return false;
+      return true;
+    }
+    function solve(index) {
+      while (index < 81 && grid[Math.floor(index / 9)][index % 9] !== 0) index++;
+      if (index === 81) return true;
+      var row = Math.floor(index / 9), col = index % 9;
+      var candidates = shuffled([1,2,3,4,5,6,7,8,9], rng);
+      for (var i = 0; i < candidates.length; i++) {
+        if (allowed(row, col, candidates[i])) {
+          grid[row][col] = candidates[i];
+          if (solve(index + 1)) return true;
+          grid[row][col] = 0;
+        }
+      }
+      return false;
+    }
+    solve(0);
+    return grid;
+  }
+  function createPuzzle(options) {
+    options = options || {};
+    var difficulty = GIVEN_COUNTS[options.difficulty] ? options.difficulty : 'easy';
+    var rng = options.rng || Math.random;
+    var solution = generateSolution(rng);
+    var puzzle = copyGrid(solution);
+    var positions = shuffled(Array.from({ length: 81 }, function (_, i) { return i; }), rng);
+    for (var i = 0; i < 81 - GIVEN_COUNTS[difficulty]; i++) puzzle[Math.floor(positions[i] / 9)][positions[i] % 9] = 0;
+    return {
+      puzzle: puzzle,
+      solution: solution,
+      fixed: puzzle.map(function (row) { return row.map(function (value) { return value !== 0; }); }),
+      difficulty: difficulty
+    };
+  }
+  function isValidPlacement(grid, row, col, value) {
+    if (!validShape(grid) || row < 0 || row > 8 || col < 0 || col > 8 || !isValidValue(value)) return false;
+    var copy = copyGrid(grid); copy[row][col] = 0;
+    for (var i = 0; i < 9; i++) if (copy[row][i] === value || copy[i][col] === value) return false;
+    var top = Math.floor(row / 3) * 3, left = Math.floor(col / 3) * 3;
+    for (var r = top; r < top + 3; r++) for (var c = left; c < left + 3; c++) if (copy[r][c] === value) return false;
+    return true;
+  }
+  function isCompleteSolution(values, solution, fixed) {
+    if (!validShape(values) || !validShape(solution) || !isValidGrid(values)) return false;
+    for (var r = 0; r < 9; r++) for (var c = 0; c < 9; c++) {
+      if (!isValidValue(values[r][c]) || values[r][c] !== solution[r][c]) return false;
+      if (fixed && fixed[r][c] && values[r][c] !== solution[r][c]) return false;
+    }
+    return true;
+  }
+  function cloneState(state) {
+    return Object.assign({}, state, { values: copyGrid(state.values), notes: state.notes.map(function (row) { return row.map(function (set) { return new Set(set); }); }) });
+  }
+  function editable(state, row, col) { return validShape(state.puzzle) && row >= 0 && row < 9 && col >= 0 && col < 9 && !state.fixed[row][col]; }
+  function setValue(state, row, col, value) {
+    if (!editable(state, row, col) || !isValidValue(value) || state.status === 'won' || state.status === 'lost') return state;
+    var next = cloneState(state); next.values[row][col] = value; next.notes[row][col].clear(); return next;
+  }
+  function clearValue(state, row, col) {
+    if (!editable(state, row, col) || state.status === 'won' || state.status === 'lost') return state;
+    var next = cloneState(state); next.values[row][col] = 0; next.notes[row][col].clear(); return next;
+  }
+  function toggleNote(state, row, col, value) {
+    if (!editable(state, row, col) || !isValidValue(value) || state.status === 'won' || state.status === 'lost') return state;
+    var next = cloneState(state); if (next.notes[row][col].has(value)) next.notes[row][col].delete(value); else next.notes[row][col].add(value); return next;
+  }
+  return { GIVEN_COUNTS: GIVEN_COUNTS, LEVELS: LEVELS, isValidValue: isValidValue, isValidGrid: isValidGrid, isValidPlacement: isValidPlacement, createPuzzle: createPuzzle, isCompleteSolution: isCompleteSolution, setValue: setValue, clearValue: clearValue, toggleNote: toggleNote };
+}));

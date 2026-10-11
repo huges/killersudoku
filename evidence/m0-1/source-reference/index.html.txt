@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sudoku</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/sudoku-core.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <h1>Sudoku</h1>
+    <p>Completa la griglia 9×9 usando tastiera o tastierino.</p>
+    <section class="controls" aria-label="Controlli partita">
+      <label for="difficulty">Difficoltà</label>
+      <select id="difficulty">
+        <option value="easy">Facile</option>
+        <option value="medium">Media</option>
+        <option value="hard">Difficile</option>
+        <option value="expert">Esperto</option>
+      </select>
+      <button id="new-game" type="button">Nuova partita</button>
+      <span>Tempo <strong id="timer">00:00</strong></span>
+      <span>Errori <strong id="errors">0 / 3</strong></span>
+    </section>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <table id="sudoku-grid" aria-label="Griglia Sudoku 9 per 9"><tbody></tbody></table>
+    <section class="keypad" aria-label="Tastierino numerico">
+      <div class="numbers">
+        <button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="3">3</button>
+        <button type="button" data-value="4">4</button><button type="button" data-value="5">5</button><button type="button" data-value="6">6</button>
+        <button type="button" data-value="7">7</button><button type="button" data-value="8">8</button><button type="button" data-value="9">9</button>
+      </div>
+      <button id="note-mode" type="button" aria-pressed="false">Annotazioni</button>
+      <button id="clear-cell" type="button">Cancella cella</button>
+    </section>
+    <p class="instructions">Seleziona una cella, poi usa una cifra, Backspace/Delete o le frecce. Premi N per le annotazioni.</p>
+  </main>
+</body>
+</html>

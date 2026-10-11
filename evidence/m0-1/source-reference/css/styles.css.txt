@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+:root { font-family: system-ui, sans-serif; color: #172033; background: #eef2f7; }
+body { margin: 0; min-height: 100vh; }
+.app { width: min(100% - 2rem, 680px); margin: 0 auto; padding: 2rem 0 3rem; }
+h1 { margin: 0; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: 1.25rem 0 .75rem; }
+button, select { border: 1px solid #aebbd0; border-radius: .4rem; background: #fff; color: inherit; font: inherit; padding: .55rem .75rem; cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 3px solid #e69b2f; outline-offset: 2px; }
+button:disabled { cursor: default; opacity: .65; }
+.status { min-height: 1.5rem; font-weight: 700; }
+#sudoku-grid { border-collapse: collapse; table-layout: fixed; width: min(100%, 540px); margin: 1rem auto; border: 3px solid #172033; background: #172033; }
+#sudoku-grid td { width: 11.11%; height: 3.5rem; padding: 0; border: 1px solid #9aa8bc; background: #fff; text-align: center; }
+#sudoku-grid tr:nth-child(3n) td { border-bottom: 2px solid #172033; }
+#sudoku-grid td:nth-child(3n) { border-right: 2px solid #172033; }
+#sudoku-grid td:nth-child(9n) { border-right: 0; }
+.cell { width: 100%; height: 100%; min-height: 3.5rem; padding: 0; border: 0; border-radius: 0; font-size: clamp(1.1rem, 5vw, 1.8rem); font-weight: 700; }
+.fixed { background: #dce4f2 !important; color: #172033; }
+.editable { color: #2456b8; }
+.cell.selected { outline: 3px solid #e69b2f; outline-offset: -3px; position: relative; z-index: 1; }
+.cell.error { background: #ffdede; color: #b52222; }
+.fixed-value { font-size: clamp(1.1rem, 5vw, 1.8rem); font-weight: 700; }
+.notes { display: grid; grid-template-columns: repeat(3, 1fr); font-size: .7rem; line-height: 1.1; color: #2456b8; }
+.keypad { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; }
+.numbers { display: grid; grid-template-columns: repeat(3, 3rem); gap: .4rem; }
+#note-mode.active { background: #dce8ff; border-color: #3569d4; }
+.instructions { color: #526078; font-size: .92rem; }
+@media (max-width: 500px) { .app { padding-top: 1rem; } #sudoku-grid td, .cell { height: 2.8rem; min-height: 2.8rem; } }

@@ -1,0 +1,213 @@
+(function () {
+  'use strict';
+
+  var core = window.SudokuCore;
+  var grid = document.querySelector('#sudoku-grid tbody');
+  var difficulty = document.getElementById('difficulty');
+  var status = document.getElementById('status');
+  var timer = document.getElementById('timer');
+  var errors = document.getElementById('errors');
+  var noteButton = document.getElementById('note-mode');
+  var clearButton = document.getElementById('clear-cell');
+  var selected = null;
+  var noteMode = false;
+  var interval = null;
+  var state;
+  var cells = [];
+
+  function scoreFor(game) {
+    var base = { easy: 1000, medium: 1500, hard: 2000, expert: 2500 };
+    return Math.max(0, base[game.difficulty] - game.elapsedSeconds - game.errors * 100);
+  }
+
+  function formatTime(seconds) {
+    return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+  }
+
+  function stopTimer() {
+    if (interval !== null) {
+      clearInterval(interval);
+      interval = null;
+    }
+  }
+
+  function updateElapsed() {
+    if (state.startedAt !== null && state.status === 'playing') {
+      state.elapsedSeconds = Math.floor((Date.now() - state.startedAt) / 1000);
+    }
+  }
+
+  function startTimer() {
+    state.startedAt = Date.now();
+    interval = setInterval(function () {
+      updateElapsed();
+      renderMeta();
+    }, 1000);
+  }
+
+  function newGame() {
+    stopTimer();
+    var puzzle = core.createPuzzle({ difficulty: difficulty.value, rng: Math.random });
+    state = {
+      puzzle: puzzle.puzzle,
+      solution: puzzle.solution,
+      fixed: puzzle.fixed,
+      values: puzzle.puzzle.map(function (row) { return row.slice(); }),
+      notes: puzzle.puzzle.map(function (row) { return row.map(function () { return new Set(); }); }),
+      difficulty: puzzle.difficulty,
+      errors: 0,
+      maxErrors: 3,
+      elapsedSeconds: 0,
+      startedAt: null,
+      status: 'playing',
+      score: null
+    };
+    startTimer();
+    selected = null;
+    noteMode = false;
+    noteButton.classList.remove('active');
+    noteButton.setAttribute('aria-pressed', 'false');
+    render();
+  }
+
+  function cellLabel(row, col, text) {
+    return 'Riga ' + (row + 1) + ', colonna ' + (col + 1) + ': ' + (text || 'vuota');
+  }
+
+  function notesText(row, col) {
+    return Array.from(state.notes[row][col]).sort(function (a, b) { return a - b; }).join(' ');
+  }
+
+  function select(row, col) {
+    selected = { row: row, col: col };
+    render();
+    cells[row][col].focus();
+  }
+
+  function selectedIsEditable() {
+    return selected && !state.fixed[selected.row][selected.col];
+  }
+
+  function enterValue(value) {
+    if (!selectedIsEditable() || state.status === 'won' || state.status === 'lost') return;
+    var row = selected.row;
+    var col = selected.col;
+    if (noteMode) {
+      state = core.toggleNote(state, row, col, value);
+    } else {
+      state = core.setValue(state, row, col, value);
+      if (state.values[row][col] !== state.solution[row][col]) {
+        state.errors += 1;
+        if (state.errors > state.maxErrors) {
+          state.status = 'lost';
+          updateElapsed();
+          stopTimer();
+        }
+      }
+      if (state.status !== 'lost' && core.isCompleteSolution(state.values, state.solution, state.fixed)) {
+        updateElapsed();
+        state.status = 'won';
+        state.score = scoreFor(state);
+        stopTimer();
+      }
+    }
+    render();
+  }
+
+  function clearSelected() {
+    if (!selectedIsEditable() || state.status === 'won' || state.status === 'lost') return;
+    state = core.clearValue(state, selected.row, selected.col);
+    render();
+  }
+
+  function move(rowDelta, colDelta) {
+    var row = selected ? selected.row : 0;
+    var col = selected ? selected.col : 0;
+    row = Math.max(0, Math.min(8, row + rowDelta));
+    col = Math.max(0, Math.min(8, col + colDelta));
+    select(row, col);
+  }
+
+  function renderMeta() {
+    updateElapsed();
+    timer.textContent = formatTime(state.elapsedSeconds);
+    errors.textContent = state.errors + ' / ' + state.maxErrors;
+    noteButton.classList.toggle('active', noteMode);
+    noteButton.setAttribute('aria-pressed', String(noteMode));
+    noteButton.disabled = state.status === 'won' || state.status === 'lost';
+    clearButton.disabled = !selectedIsEditable() || state.status === 'won' || state.status === 'lost';
+    if (state.status === 'playing') status.textContent = noteMode ? 'Modalità annotazioni attiva.' : 'Partita in corso.';
+    else if (state.status === 'won') status.textContent = 'Hai vinto! Punteggio: ' + state.score;
+    else status.textContent = 'Partita persa: hai raggiunto il limite di errori.';
+  }
+
+  function render() {
+    for (var row = 0; row < 9; row++) {
+      for (var col = 0; col < 9; col++) {
+        var cell = cells[row][col];
+        var fixed = state.fixed[row][col];
+        var value = state.values[row][col];
+        cell.className = 'cell ' + (fixed ? 'fixed' : 'editable');
+        if (selected && selected.row === row && selected.col === col) cell.classList.add('selected');
+        if (!fixed && value && value !== state.solution[row][col]) cell.classList.add('error');
+        cell.parentElement.setAttribute('data-row', row);
+        cell.parentElement.setAttribute('data-col', col);
+        cell.setAttribute('data-row', row);
+        cell.setAttribute('data-col', col);
+        cell.setAttribute('aria-label', cellLabel(row, col, fixed ? 'indizio ' + value : (value || notesText(row, col))));
+        cell.disabled = fixed || state.status === 'won' || state.status === 'lost';
+        if (fixed) {
+          cell.innerHTML = '<span class="fixed-value">' + value + '</span>';
+        } else {
+          cell.innerHTML = value ? String(value) : (notesText(row, col) ? '<span class="notes">' + notesText(row, col) + '</span>' : '');
+        }
+      }
+    }
+    renderMeta();
+  }
+
+  for (var r = 0; r < 9; r++) {
+    var tr = document.createElement('tr');
+    cells[r] = [];
+    for (var c = 0; c < 9; c++) {
+      var td = document.createElement('td');
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.addEventListener('click', (function (row, col) {
+        return function () { select(row, col); };
+      }(r, c)));
+      td.appendChild(button);
+      tr.appendChild(td);
+      cells[r][c] = button;
+    }
+    grid.appendChild(tr);
+  }
+
+  document.querySelectorAll('[data-value]').forEach(function (button) {
+    button.addEventListener('click', function () { enterValue(Number(button.dataset.value)); });
+  });
+  document.getElementById('new-game').addEventListener('click', newGame);
+  clearButton.addEventListener('click', clearSelected);
+  noteButton.addEventListener('click', function () {
+    noteMode = !noteMode;
+    renderMeta();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (/^[1-9]$/.test(event.key)) {
+      enterValue(Number(event.key));
+      event.preventDefault();
+    } else if (event.key === 'Backspace' || event.key === 'Delete') {
+      clearSelected();
+      event.preventDefault();
+    } else if (event.key.toLowerCase() === 'n') {
+      noteMode = !noteMode;
+      renderMeta();
+      event.preventDefault();
+    } else if (event.key === 'ArrowUp') move(-1, 0);
+    else if (event.key === 'ArrowDown') move(1, 0);
+    else if (event.key === 'ArrowLeft') move(0, -1);
+    else if (event.key === 'ArrowRight') move(0, 1);
+  });
+
+  newGame();
+}());
