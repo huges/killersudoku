@@ -162,7 +162,8 @@ describe('M0-3 domain', () => {
 
     const overlapping = structuredClone(partialPuzzle)
     overlapping.cages[0].cells = [{ row: 0, col: 0 }, { row: 0, col: 1 }]
-    expect(() => validatePuzzle(overlapping)).toThrow()
+    overlapping.cages[0].sum = 3
+    expect(() => validatePuzzle(overlapping)).toThrow('cages overlap')
 
     const duplicateGiven = structuredClone(partialPuzzle)
     duplicateGiven.givens[0][2] = 1
