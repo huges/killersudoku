@@ -35,14 +35,16 @@ Per sviluppo locale è disponibile `npm run dev`. I test usano Vitest in modalit
 
 ## Lockfile e verifica locale
 
-`package-lock.json` deve essere generato dagli strumenti npm e versionato; non è ammesso costruirlo manualmente. In questa esecuzione non è esposto uno strumento npm per generarlo né per eseguire `npm ci`, lint, test o build. Il tentativo non è stato quindi effettuabile: non è stato restituito un comando npm disponibile né un log di esecuzione.
+`package-lock.json` è stato generato tramite lo strumento Mozart autorizzato `workspace_generate_lockfile`, usando npm con Node 22 in ambiente isolato, ed è versionato nel repository. La generazione è avvenuta senza installare dipendenze né eseguire hook; non costituisce da sola evidenza di validazione del progetto.
 
-Di conseguenza restano da acquisire tramite un ambiente autorizzato:
+Il contratto Mozart acquisito espone il runner ufficiale `python3 scripts/mozart-web-game.py validate`. Il runner opera dalla radice del checkout autorizzato e gestisce una sola installazione `npm ci --ignore-scripts --no-audit --no-fund`, seguita nello stesso workspace da lint, test e build. In CI il checkout viene fornito dal normale step di checkout; il contratto non richiede un mount server.
 
-- `package-lock.json` generato da npm;
-- esito e log della sequenza unica installazione → lint → test → build;
+Restano da acquisire tramite un'esecuzione governata:
+
+- esito e log completi della sequenza unica installazione → lint → test → build;
 - `dist/index.html` prodotto dalla build;
-- esito del validatore Mozart.
+- esito del validatore Mozart;
+- conferma dell'abilitazione di GitHub Actions per questo progetto.
 
 ## CI
 

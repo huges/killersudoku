@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const render = vi.fn()
+const { render } = vi.hoisted(() => ({
+  render: vi.fn(),
+}))
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({ render })),

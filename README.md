@@ -42,12 +42,16 @@ Sono disponibili anche `npm run typecheck`, `npm run lint` e `npm run test`; il 
 
 ## Mozart e CI
 
-Il comando ufficiale per invocare il validatore Mozart `web-game/2` non è presente nell’evidenza disponibile e non viene inventato in questo repository. Mancano inoltre la prova del trasferimento/mount del checkout nella radice autorizzata e la conferma che GitHub Actions sia abilitata per questo progetto.
+Il contratto Mozart acquisito espone il runner ufficiale `python3 scripts/mozart-web-game.py validate`. Il runner opera dalla radice del checkout autorizzato; in CI il checkout è fornito dal normale step di checkout e non richiede un mount server. Il contratto non costituisce evidenza di validazione riuscita del progetto.
 
-Questi sono gap di evidenza bloccanti, non una dichiarazione di assenza della capacità. Non è stata aggiunta una workflow GitHub Actions finché la piattaforma non sarà verificata. M0-2 non può essere dichiarato completato finché non sono disponibili comando ufficiale, prova del checkout, log consultabili, esito del validatore, CI riuscita e `dist/index.html`.
+Restano gap di evidenza bloccanti: non sono ancora disponibili log della sequenza governata, esito del validatore, `dist/index.html` prodotto dalla build o conferma che GitHub Actions sia abilitata per questo progetto. Non è stata aggiunta una workflow GitHub Actions finché la piattaforma non sarà verificata. M0-2 non può essere dichiarato completato finché questi gap non sono risolti.
 
-Quando la capacità sarà esposta, la validazione dovrà mantenere un solo job e una sola installazione, nell’ordine installazione → lint → test → build, conservando log e artefatti senza segreti.
+Quando la CI sarà verificata e predisposta, dovrà mantenere un solo job e una sola installazione, nell’ordine installazione → lint → test → build, conservando log e artefatti senza segreti.
 
 ## Riproducibilità e stato del lockfile
 
-`package-lock.json` deve essere generato dagli strumenti npm e versionato; non deve essere costruito manualmente. Nell’ambiente di questa consegna non è esposto uno strumento di esecuzione npm per generarlo o per eseguire `npm ci`, lint, test e build. Di conseguenza il lockfile, i log, l’artefatto `dist/` e la validazione governata restano da acquisire tramite il runner autorizzato.
+`package-lock.json` è stato generato tramite lo strumento Mozart autorizzato `workspace_generate_lockfile`, usando npm Node 22 in ambiente isolato, ed è versionato nel repository. Il lockfile è stato preparato senza installare dipendenze né eseguire hook; non costituisce da solo evidenza di validazione del progetto.
+
+Il contratto Mozart acquisito espone il runner ufficiale `python3 scripts/mozart-web-game.py validate`. Il runner esegue dalla radice del checkout autorizzato una sola installazione `npm ci --ignore-scripts --no-audit --no-fund`, quindi lint, test e build nello stesso workspace. Il contratto precisa che in CI il checkout è fornito dal normale step di checkout e non richiede un mount server. Questa acquisizione non dimostra ancora l’esito della validazione del progetto né l’abilitazione di GitHub Actions.
+
+Restano da acquisire tramite un’esecuzione governata: log completi della sequenza, esito del validatore Mozart, `dist/index.html` e conferma della piattaforma GitHub Actions. M0-2 non è dichiarato completato finché questi gap bloccanti non sono risolti.
