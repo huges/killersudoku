@@ -222,8 +222,8 @@ describe('M0-3 domain', () => {
     const originalState = newGame(partialPuzzle)
     const editInput = { value: null, notes: [2, 6] }
     const edited = editCell(partialPuzzle, originalState, cell, editInput)
-    expect(undo(partialPuzzle, originalState)).toEqual(originalState)
-    expect(redo(partialPuzzle, originalState)).toEqual(originalState)
+    expect(() => undo(partialPuzzle, originalState)).toThrow()
+    expect(() => redo(partialPuzzle, originalState)).toThrow()
     const undone = undo(partialPuzzle, edited)
     expect(undone.historyIndex).toBe(-1)
     expect(undone.status).toBe('in_progress')
