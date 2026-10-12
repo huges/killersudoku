@@ -42,7 +42,7 @@ Per sviluppo locale è disponibile `npm run dev`. Il runner esegue il typecheck 
 
 ## CI GitHub Actions
 
-GitHub Actions non è stata verificata come abilitata per questo progetto; per questo motivo nessun workflow viene versionato in questa revisione. Il gap è preciso: gli strumenti Mozart disponibili non espongono una verifica dell’abilitazione né dell’esecuzione CI. Quando la piattaforma sarà verificata, il workflow dovrà configurare Node 22.12.0 (minimo richiesto da Vite 7 nella famiglia Node 22) e Python 3, invocare esclusivamente `python3 scripts/mozart-web-game.py validate` dalla radice del checkout e conservare `dist/` come artefatto senza segreti.
+GitHub Actions è stata verificata come abilitata per `huges/killersudoku` dall’operatore. È stata inoltre verificata la disponibilità del permesso Mozart Workflows: Read and write. La workflow versionata configura Node 22.12.0 (compatibile con Vite 7 nella famiglia Node 22) e Python 3, invoca esclusivamente `python3 scripts/mozart-web-game.py validate` dalla radice del checkout e conserva `dist/` come artefatto senza segreti. Queste verifiche di abilitazione e permessi non costituiscono ancora l’esito di un’esecuzione CI: log, risultato della workflow e validazione Mozart del checkout restano da acquisire.
 
 Non sono ancora disponibili log, esito del validatore Mozart, esecuzione CI o `dist/index.html` prodotti da un’esecuzione governata di questo checkout.
 
