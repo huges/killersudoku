@@ -105,6 +105,7 @@ def run(root: Path, phase: str) -> None:
     check_contract(root, require_lock=phase != "lockfile")
     if phase != "lockfile":
         clean_head(root)
+    # Never forward provider tokens, database passwords, proxy credentials or user npm config.
     with tempfile.TemporaryDirectory(prefix="mozart-npm-") as cache:
         user_config = Path(cache) / "user.npmrc"
         global_config = Path(cache) / "global.npmrc"

@@ -42,9 +42,9 @@ Per sviluppo locale è disponibile `npm run dev`. Il runner esegue il typecheck 
 
 ## CI GitHub Actions
 
-È stata predisposta `.github/workflows/ci.yml` per push e pull request. Il workflow configura Node 22.12.0 e Python 3, quindi dalla radice del checkout invoca esclusivamente `python3 scripts/mozart-web-game.py validate`. Il runner gestisce l’unica installazione, lint, test e build. Il workflow conserva `dist/` come artefatto.
+GitHub Actions non è stata verificata come abilitata per questo progetto; per questo motivo nessun workflow viene versionato in questa revisione. Il gap è preciso: gli strumenti Mozart disponibili non espongono una verifica dell’abilitazione né dell’esecuzione CI. Quando la piattaforma sarà verificata, il workflow dovrà configurare Node 22.12.0 (minimo richiesto da Vite 7 nella famiglia Node 22) e Python 3, invocare esclusivamente `python3 scripts/mozart-web-game.py validate` dalla radice del checkout e conservare `dist/` come artefatto senza segreti.
 
-Non è disponibile nello strumento Mozart usato in questo turno una verifica indipendente dell’abilitazione di GitHub Actions per questo progetto. La workflow è quindi predisposta ma la sua esecuzione e abilitazione restano un gap di evidenza; non si dichiara la CI riuscita.
+Non sono ancora disponibili log, esito del validatore Mozart, esecuzione CI o `dist/index.html` prodotti da un’esecuzione governata di questo checkout.
 
 ## Gate di completamento
 
