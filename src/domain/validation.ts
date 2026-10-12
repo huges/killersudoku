@@ -2,7 +2,6 @@ import {
   type CellCoordinate,
   type CellSnapshot,
   type GameState,
-  type HistoryEntry,
   type PuzzleDefinition,
   type SaveDocument,
   GRID_SIZE,
@@ -32,10 +31,6 @@ export function isValidCoordinate(value: unknown): value is CellCoordinate {
 
 function coordinateKey(coordinate: CellCoordinate): string {
   return `${coordinate.row}:${coordinate.col}`
-}
-
-function sameCoordinate(left: CellCoordinate, right: CellCoordinate): boolean {
-  return left.row === right.row && left.col === right.col
 }
 
 function sameSnapshot(left: CellSnapshot, right: CellSnapshot): boolean {
@@ -157,10 +152,6 @@ export function validatePuzzle(puzzle: PuzzleDefinition): void {
     if (!possibleDistinctSums(missing, available).has(cage.sum - givens.reduce((sum, value) => sum + value, 0))) validationError('cage sum is locally incompatible')
   }
   if (covered.size !== GRID_SIZE * GRID_SIZE) validationError('cages must cover the grid exactly')
-}
-
-function initialSnapshot(puzzle: PuzzleDefinition, cell: CellCoordinate): CellSnapshot {
-  return { value: puzzle.givens[cell.row][cell.col], notes: [] }
 }
 
 export function validateCellSnapshot(snapshot: unknown, name = 'snapshot'): asserts snapshot is CellSnapshot {
