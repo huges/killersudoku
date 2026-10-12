@@ -154,4 +154,101 @@ describe('M0-3 domain', () => {
       expect(candidate).toEqual(before)
     }
   })
+
+  it('rejects invalid coordinates, disconnected or overlapping cages, duplicate givens and unsupported versions', () => {
+    const disconnected = structuredClone(partialPuzzle)
+    disconnected.cages[0].cells = [{ row: 0, col: 0 }, { row: 0, col: 2 }]
+    expect(() => validatePuzzle(disconnected)).toThrow()
+
+    const overlapping = structuredClone(partialPuzzle)
+    overlapping.cages[0].cells = [{ row: 0, col: 0 }, { row: 0, col: 1 }]
+    expect(() => validatePuzzle(overlapping)).toThrow()
+
+    const duplicateGiven = structuredClone(partialPuzzle)
+    duplicateGiven.givens[0][2] = 1
+    expect(() => validatePuzzle(duplicateGiven)).toThrow()
+
+    const unsupportedPuzzle = structuredClone(partialPuzzle)
+    unsupportedPuzzle.schemaVersion = '2.0' as typeof unsupportedPuzzle.schemaVersion
+    expect(() => validatePuzzle(unsupportedPuzzle)).toThrow()
+
+    const invalidCoordinate = structuredClone(partialPuzzle)
+    invalidCoordinate.cages[0].cells = [{ row: -1, col: 0 }]
+    expect(() => validatePuzzle(invalidCoordinate)).toThrow()
+  })
+
+  it('rejects malformed state history, snapshots, versions and given edits', () => {
+    const initial = newGame(partialPuzzle)
+    for (const history of ['', null, {}, undefined]) {
+      const candidate = structuredClone(initial) as unknown as Record<string, unknown>
+      candidate.history = history
+      expect(() => validateGameState(partialPuzzle, candidate as never)).toThrow()
+    }
+
+    const changedGiven = structuredClone(initial)
+    changedGiven.values[0][0] = null
+    expect(() => validateGameState(partialPuzzle, changedGiven)).toThrow()
+    expect(() => editCell(partialPuzzle, initial, { row: 0, col: 0 }, { value: null, notes: [] })).toThrow()
+
+    const invalidNotes = [
+      [3, 3],
+      [4, 2],
+      [0],
+      [10],
+    ]
+    for (const notes of invalidNotes) {
+      expect(() => editCell(partialPuzzle, initial, cell, { value: null, notes })).toThrow()
+    }
+
+    const invalidIndex = structuredClone(editCell(partialPuzzle, initial, cell, snapshot))
+    invalidIndex.historyIndex = 2
+    expect(() => validateGameState(partialPuzzle, invalidIndex)).toThrow()
+
+    const inconsistentRedo = structuredClone(editCell(partialPuzzle, initial, cell, snapshot))
+    inconsistentRedo.history.push({
+      id: 'redo', type: 'edit_cell', cell: { row: 0, col: 3 },
+      before: { value: 9, notes: [] }, after: { value: 4, notes: [] }, elapsedSecondsAfter: 0,
+    })
+    inconsistentRedo.historyIndex = 0
+    expect(() => validateGameState(partialPuzzle, inconsistentRedo)).toThrow()
+
+    const unsupportedState = structuredClone(initial)
+    unsupportedState.schemaVersion = '2.0' as typeof unsupportedState.schemaVersion
+    expect(() => validateGameState(partialPuzzle, unsupportedState)).toThrow()
+  })
+
+  it('handles undo and redo limits, total undo, and preserves immutable nested inputs', () => {
+    const originalPuzzle = structuredClone(partialPuzzle)
+    const originalState = newGame(partialPuzzle)
+    const editInput = { value: null, notes: [2, 6] }
+    const edited = editCell(partialPuzzle, originalState, cell, editInput)
+    expect(undo(partialPuzzle, originalState)).toEqual(originalState)
+    expect(redo(partialPuzzle, originalState)).toEqual(originalState)
+    const undone = undo(partialPuzzle, edited)
+    expect(undone.historyIndex).toBe(-1)
+    expect(undone.status).toBe('in_progress')
+    expect(undo(partialPuzzle, undone)).toEqual(undone)
+    expect(redo(partialPuzzle, undone).notes[0][2]).toEqual([2, 6])
+    expect(partialPuzzle).toEqual(originalPuzzle)
+    expect(originalState).toEqual(newGame(partialPuzzle))
+    expect(editInput).toEqual({ value: null, notes: [2, 6] })
+  })
+
+  it('round-trips an active redo branch with non-zero time and preserves values and notes', () => {
+    let game = editCell(partialPuzzle, newGame(partialPuzzle), cell, { value: null, notes: [3, 5] })
+    game.elapsedSeconds = 7
+    game.history[0].elapsedSecondsAfter = 7
+    game = editCell(partialPuzzle, game, { row: 0, col: 3 }, { value: 4, notes: [] })
+    const undone = undo(partialPuzzle, game)
+    expect(undone.elapsedSeconds).toBe(7)
+    expect(undone.historyIndex).toBe(0)
+    const restored = deserialize(serialize(documentFor(undone))).game
+    expect(restored).toEqual(undone)
+    expect(restored.notes[0][2]).toEqual([3, 5])
+    expect(restored.values[0][3]).toBeNull()
+    const redone = redo(partialPuzzle, restored)
+    expect(redone.elapsedSeconds).toBe(7)
+    expect(redone.values[0][3]).toBe(4)
+    expect(redone.notes[0][2]).toEqual([3, 5])
+  })
 })

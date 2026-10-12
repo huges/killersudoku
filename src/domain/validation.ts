@@ -160,7 +160,7 @@ export function validateCellSnapshot(snapshot: unknown, name = 'snapshot'): asse
 
 export function validateGameState(puzzle: PuzzleDefinition, game: GameState): void {
   validatePuzzle(puzzle)
-  if (!isRecord(game) || game.schemaVersion !== SCHEMA_VERSION || game.puzzleId !== puzzle.puzzleId
+  if (!isRecord(game) || !Array.isArray(game.history) || game.schemaVersion !== SCHEMA_VERSION || game.puzzleId !== puzzle.puzzleId
     || !statuses.has(game.status) || !isInteger(game.elapsedSeconds) || game.elapsedSeconds < 0
     || !isInteger(game.historyIndex) || game.historyIndex < -1 || game.historyIndex >= game.history.length) validationError('invalid game metadata')
   validateMatrix(game.values, 'values', isCellValue)

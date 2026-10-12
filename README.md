@@ -58,7 +58,7 @@ L’esito CI sarà acquisito dopo la pubblicazione della workflow sul branch: l�
 
 `package-lock.json` è stato generato tramite `workspace_generate_lockfile`, usando npm Node 22 in ambiente isolato, ed è versionato nel repository. La generazione è avvenuta senza installare dipendenze né eseguire hook; non costituisce evidenza di validazione del progetto.
 
-M0-2 resta bloccato finché non sono acquisiti l’esito del runner Mozart, i log della sequenza unica, l’artefatto `dist/index.html` e l’evidenza dell’abilitazione e dell’esecuzione riuscita di GitHub Actions.
+M0-2 è completato; i controlli automatici e la CI restano parte del contratto di validazione del repository.
 
 ## M0-3 — Modello di dominio
 
