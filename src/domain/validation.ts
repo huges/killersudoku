@@ -132,7 +132,8 @@ export function validatePuzzle(puzzle: PuzzleDefinition): void {
   if (!Array.isArray(puzzle.cages)) validationError('cages must be an array')
   const ids = new Set<string>(); const covered = new Set<string>()
   for (const cage of puzzle.cages) {
-    if (!isRecord(cage) || typeof cage.id !== 'string' || cage.id.length === 0 || ids.has(cage.id) || !isInteger(cage.sum)) validationError('invalid cage')
+    if (!isRecord(cage) || Object.keys(cage).some((key) => !['id', 'cells', 'sum'].includes(key))
+      || typeof cage.id !== 'string' || cage.id.length === 0 || ids.has(cage.id) || !isInteger(cage.sum)) validationError('invalid cage')
     ids.add(cage.id); validateCoordinateList(cage.cells, `cage ${cage.id}.cells`)
     if (!orthogonallyConnected(cage.cells)) validationError('cage is not connected')
     const count = cage.cells.length

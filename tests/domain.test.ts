@@ -24,6 +24,12 @@ describe('M0-3 domain', () => {
     validatePuzzle(partialPuzzle)
     expect(deriveCageData(partialPuzzle.cages[0])).toEqual({ labelAnchor: { row: 0, col: 0 }, label: '1' })
     expect(JSON.stringify(partialPuzzle)).not.toContain('labelAnchor')
+
+    const withDerivedFields = structuredClone(partialPuzzle)
+    ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).labelAnchor = { row: 0, col: 0 }
+    ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).label = '1'
+    expect(() => validatePuzzle(withDerivedFields)).toThrow()
+    expect(() => deserialize(JSON.stringify(documentFor(newGame(withDerivedFields))))).toThrow()
   })
 
   it('rejects non-canonical cage cells without mutating input', () => {
