@@ -50,9 +50,9 @@ python3 scripts/mozart-web-game.py validate
 
 Il runner opera dalla radice del checkout autorizzato e gestisce nello stesso workspace una sola installazione `npm ci --ignore-scripts --no-audit --no-fund`, quindi lint, test e build. Il checkout CI è fornito dallo step di checkout e non richiede un mount server. La copia del runner e il contratto acquisito non costituiscono da soli evidenza di validazione del progetto.
 
-GitHub Actions è stata verificata come abilitata per `huges/killersudoku` dall’operatore. È stata inoltre verificata la disponibilità del permesso Mozart Workflows: Read and write. La workflow versionata configura Python 3 e Node `22.12.0` (compatibile con Vite 7 nella famiglia Node 22), invoca esclusivamente il runner Mozart dalla radice del checkout e conserva `dist/` come artefatto senza segreti. Queste verifiche di abilitazione e permessi non costituiscono ancora l’esito di un’esecuzione CI: log, risultato della workflow e validazione Mozart del checkout restano da acquisire.
+L’operatore ha verificato nelle impostazioni di `huges/killersudoku` che GitHub Actions è abilitata e ha aggiornato il token Mozart con il permesso `Workflows: Read and write`. Questa è un’evidenza dichiarata dall’operatore, non una verifica indipendente di Mozart. La workflow versionata configura Python 3 e Node `22.12.0` (compatibile con Vite 7 nella famiglia Node 22), invoca esclusivamente il runner Mozart dalla radice del checkout e conserva `dist/` come artefatto senza segreti.
 
-Non sono ancora disponibili log, esito del validatore Mozart, esecuzione CI o `dist/index.html` prodotti da un’esecuzione governata di questo checkout.
+L’esito CI sarà acquisito dopo la pubblicazione della workflow sul branch: l’assenza dell’esecuzione in questa fase non giustifica la rimozione della workflow e non impedisce test/build Mozart. Non sono ancora disponibili log, esito del validatore Mozart, esecuzione CI o `dist/index.html` prodotti da un’esecuzione governata di questo checkout; il completamento M0-2 resta subordinato a una CI riuscita prima del merge.
 
 ## Riproducibilità e stato del lockfile
 
