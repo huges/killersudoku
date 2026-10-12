@@ -58,4 +58,10 @@ L’esito CI sarà acquisito dopo la pubblicazione della workflow sul branch: l�
 
 `package-lock.json` è stato generato tramite `workspace_generate_lockfile`, usando npm Node 22 in ambiente isolato, ed è versionato nel repository. La generazione è avvenuta senza installare dipendenze né eseguire hook; non costituisce evidenza di validazione del progetto.
 
-M0-2 resta bloccato finché non sono acquisiti l’esito del runner Mozart, i log della sequenza unica, l’artefatto `dist/index.html` e l’evidenza dell’abilitazione e dell’esecuzione riuscita di GitHub Actions.
+M0-2 è completato; i controlli automatici e la CI restano parte del contratto di validazione del repository.
+
+## M0-3 — Modello di dominio
+
+M0-3 aggiunge il modello puro versionato del puzzle e dello stato di partita in `src/domain/`, incluse validazione di puzzle, gabbie, cronologia e documento JSON, serializzazione, operazioni immutabili di partita e fixture deterministiche. La UI resta intenzionalmente non giocabile.
+
+Il confine `PersistenceContract` in `src/domain/persistence.ts` espone esclusivamente caricamento e sostituzione atomica del documento serializzato; non introduce filesystem, database, `localStorage` o altro storage concreto. I test usano un test double per verificare che caricamenti invalidi e scritture fallite non sostituiscano il documento precedente. Il modello completo e le invarianti sono documentati in `docs/M0-3-modello.md`.
