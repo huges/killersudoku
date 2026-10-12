@@ -1,12 +1,12 @@
 # Esecuzione M0-2
 
-## Stato
+## Stato e perimetro
 
 M0-1 è approvato e completato. `docs/M0-1-perimetro.md` resta il riferimento di prodotto e layout. Commit, test e schermate di M0-1 sono evidenze dichiarate dall’operatore, non verifiche indipendenti; questa distinzione non riapre il gate M0-1.
 
 M0-2 realizza una baseline statica non giocabile con TypeScript, React e Vite. Restano escluse griglia, input, tastierino, gabbie, motore Sudoku/Killer, timer operativo, contatore errori, persistenza, autenticazione, deploy, servizi di produzione e annulla/ripristina.
 
-## Profilo Mozart
+## Profilo e runner Mozart
 
 Il repository contiene il manifest radice `mozart-software.json`:
 
@@ -14,52 +14,44 @@ Il repository contiene il manifest radice `mozart-software.json`:
 {"schema_version":2,"profile":"web-game","toolchain":"npm","node_major":22}
 ```
 
-Il profilo `web-game/2`, `runtime_available: true`, Node `v22.23.3` e la directory di esecuzione uguale alla radice del checkout autorizzato sono stati osservati tramite l’evidenza del sistema `GET /software-validation/profiles`. Node 22.x è il runtime supportato; `.nvmrc` contiene `22` e `package.json` richiede `22.x`.
-
-La modalità effettiva con cui Mozart riceve o monta il checkout nella radice autorizzata non è esposta nell’evidenza disponibile. Non è disponibile neppure un comando ufficiale eseguibile per invocare il validatore `web-game/2`. Non vengono inventati URL, token, wrapper o comandi sostitutivi. La disponibilità del profilo non equivale alla validazione riuscita del progetto.
-
-## Comandi del checkout
-
-Gli script versionati sono non interattivi e non reinstallano dipendenze:
+Il profilo `web-game/2`, `runtime_available: true`, Node `v22.23.3` e la directory di esecuzione uguale alla radice del checkout autorizzato sono stati osservati tramite l’evidenza del sistema `GET /software-validation/profiles`. Il contratto Mozart acquisito espone il runner ufficiale, versionato in `scripts/mozart-web-game.py`:
 
 ```text
-npm ci --ignore-scripts --no-audit --no-fund
-npm run lint
-npm run test
-npm run build
+python3 scripts/mozart-web-game.py validate
 ```
 
-La sequenza governata richiede una sola `npm ci`, seguita da lint, test e build. `npm run build` esegue prima il controllo esplicito di `tsconfig.app.json` e `tsconfig.node.json`, poi `vite build`; l’output atteso è `dist/index.html`.
+Il runner opera dalla radice del checkout autorizzato e gestisce la sequenza unica `npm ci --ignore-scripts --no-audit --no-fund`, lint, test e build nello stesso workspace. Il contratto precisa che in CI il checkout è fornito dallo step di checkout e non richiede un mount server. L’hash SHA-256 del runner acquisito è `5255faca08b4308095729ceb5240d8c281e6445577136739e00213c3a80819ba`.
 
-Per sviluppo locale è disponibile `npm run dev`. I test usano Vitest in modalità run e jsdom. Il test dell’entry point verifica il montaggio dell’applicazione nel nodo `#root`.
+La copia versionata del runner non costituisce da sola evidenza di validazione del progetto. In questo turno non è stata acquisita un’esecuzione governata Mozart del checkout: restano da conservare log completi, esito del validatore e `dist/index.html` prodotti da tale esecuzione.
 
-## Lockfile e verifica locale
+## Runtime e comandi
 
-`package-lock.json` è stato generato tramite lo strumento Mozart autorizzato `workspace_generate_lockfile`, usando npm con Node 22 in ambiente isolato, ed è versionato nel repository. La generazione è avvenuta senza installare dipendenze né eseguire hook; non costituisce da sola evidenza di validazione del progetto.
+Vite 7 richiede Node 22.12 o successivo nella famiglia 22. `.nvmrc` mantiene `22`; `package.json` conserva `engines.node: "22.x"` perché è il vincolo ammesso dal contratto Mozart. Il workflow configura esplicitamente Node `22.12.0`, fornendo il controllo pratico della versione minima richiesta da Vite.
 
-Il contratto Mozart acquisito espone il runner ufficiale `python3 scripts/mozart-web-game.py validate`. Il runner opera dalla radice del checkout autorizzato e gestisce una sola installazione `npm ci --ignore-scripts --no-audit --no-fund`, seguita nello stesso workspace da lint, test e build. In CI il checkout viene fornito dal normale step di checkout; il contratto non richiede un mount server.
+Gli script versionati sono non interattivi e non reinstallano dipendenze. Il runner CI è l’unico comando governato:
 
-Restano da acquisire tramite un'esecuzione governata:
+```text
+python3 scripts/mozart-web-game.py validate
+```
 
-- esito e log completi della sequenza unica installazione → lint → test → build;
-- `dist/index.html` prodotto dalla build;
-- esito del validatore Mozart;
-- conferma dell'abilitazione di GitHub Actions per questo progetto.
+Per sviluppo locale è disponibile `npm run dev`. Il runner esegue il typecheck esplicito dei due progetti tramite `npm run build` prima di Vite; l’output richiesto è `dist/index.html`. I test usano Vitest in modalità run e jsdom.
 
-## CI
+## Lockfile
 
-Non è disponibile nell’evidenza corrente la conferma che GitHub Actions sia abilitata per questo progetto. Per questo motivo non viene aggiunta una workflow inventata o non verificata. La CI è un requisito obbligatorio del gate M0-2, non un requisito reso facoltativo dal gap.
+`package-lock.json` è stato generato tramite lo strumento Mozart autorizzato `workspace_generate_lockfile`, usando npm con Node 22 in ambiente isolato, ed è versionato. La generazione è avvenuta senza installare dipendenze né eseguire hook; non costituisce evidenza di validazione del progetto.
 
-Dopo la verifica della piattaforma e dell’invocazione governata, la CI dovrà usare Node 22.x, una sola installazione e un solo job con l’ordine installazione → lint → test → build, conservando log consultabili e `dist/` senza segreti. Se il validatore Mozart espone un wrapper, la CI dovrà usare esclusivamente quello; se espone una validazione separata, dovrà riutilizzare l’installazione esistente senza ripetere i controlli.
+## CI GitHub Actions
+
+È stata predisposta `.github/workflows/ci.yml` per push e pull request. Il workflow configura Node 22.12.0 e Python 3, quindi dalla radice del checkout invoca esclusivamente `python3 scripts/mozart-web-game.py validate`. Il runner gestisce l’unica installazione, lint, test e build. Il workflow conserva `dist/` come artefatto.
+
+Non è disponibile nello strumento Mozart usato in questo turno una verifica indipendente dell’abilitazione di GitHub Actions per questo progetto. La workflow è quindi predisposta ma la sua esecuzione e abilitazione restano un gap di evidenza; non si dichiara la CI riuscita.
 
 ## Gate di completamento
 
-M0-2 non è dichiarato completato. Il completamento richiede, oltre alla baseline e ai test presenti nel repository:
+M0-2 non è dichiarato completato finché non sono disponibili:
 
-1. lockfile generato da npm in un checkout pulito;
-2. una singola esecuzione governata riuscita;
-3. comando ufficiale del validatore `web-game/2`;
-4. prova del trasferimento o mount del checkout nella radice autorizzata;
-5. log consultabili, esito del validatore e `dist/index.html`;
-6. CI GitHub Actions riuscita dopo verifica della piattaforma;
-7. risoluzione dei gap di runner, CI e compatibilità.
+1. una singola esecuzione governata Mozart riuscita;
+2. log consultabili della sequenza installazione → lint → test → build;
+3. esito del validatore e `dist/index.html` prodotti dalla stessa esecuzione;
+4. prova dell’esecuzione riuscita della workflow GitHub Actions e dell’abilitazione della piattaforma;
+5. risoluzione del gap di evidenza relativo alla CI.
