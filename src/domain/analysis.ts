@@ -60,6 +60,27 @@ function canonicalCells(cells: CellCoordinate[]): CellCoordinate[] {
   return cloneCells(cells).sort(compareCells)
 }
 
+function sameViolation(left: AnalysisViolation, right: AnalysisViolation): boolean {
+  return left.type === right.type
+    && left.cause === right.cause
+    && left.cageId === right.cageId
+    && left.expectedSum === right.expectedSum
+    && left.actualSum === right.actualSum
+    && left.cells.length === right.cells.length
+    && left.cells.every((cell, index) => (
+      cell.row === right.cells[index]?.row && cell.col === right.cells[index]?.col
+    ))
+}
+
+function appendUniqueViolation(
+  violations: AnalysisViolation[],
+  violation: AnalysisViolation,
+): void {
+  if (!violations.some((existing) => sameViolation(existing, violation))) {
+    violations.push(violation)
+  }
+}
+
 function sudokuCandidates(game: GameState, cell: CellCoordinate): number[] {
   const value = game.values[cell.row][cell.col]
   if (value !== null) return [value]
@@ -165,19 +186,25 @@ export function analyzeLocalFeasibility(
       if (remainingSum === 0) combinations = [[]]
       else {
         cause = 'cage_sum_mismatch'
-        violations.push({ type: 'cage_sum_mismatch', cells, cageId: cage.id, expectedSum: cage.sum, actualSum: present.reduce((total, value) => total + value, 0) })
+        appendUniqueViolation(violations, {
+          type: 'cage_sum_mismatch',
+          cells,
+          cageId: cage.id,
+          expectedSum: cage.sum,
+          actualSum: present.reduce((total, value) => total + value, 0),
+        })
       }
     } else {
       const available = DIGITS.filter((digit) => !present.includes(digit))
       const arithmetic = arithmeticCombinations(remainingCells.length, remainingSum, available)
       if (arithmetic.length === 0) {
         cause = 'residual_sum_impossible'
-        violations.push({ type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
+        appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
       } else {
         combinations = compatibleCombinations(arithmetic, remainingCells, sudokuByCell)
         if (combinations.length === 0) {
           cause = 'candidate_conflict'
-          violations.push({ type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
+          appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
         }
       }
     }
