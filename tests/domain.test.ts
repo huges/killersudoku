@@ -4,7 +4,7 @@ import { partialPuzzle, referenceValue, solvedPuzzle } from '../src/domain/fixtu
 import { type PersistenceContract, loadDocument, saveDocument } from '../src/domain/persistence'
 import { deserialize, deriveCageData, serialize } from '../src/domain/serialization'
 import { type SaveDocument } from '../src/domain/types'
-import { validateGameState, validatePuzzle } from '../src/domain/validation'
+import { validateGameState, validatePuzzle, validateSaveDocument } from '../src/domain/validation'
 
 const cell = { row: 0, col: 2 }
 const snapshot = { value: 3, notes: [] }
@@ -29,7 +29,12 @@ describe('M0-3 domain', () => {
     ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).labelAnchor = { row: 0, col: 0 }
     ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).label = '1'
     expect(() => validatePuzzle(withDerivedFields)).toThrow()
-    expect(() => deserialize(JSON.stringify(documentFor(newGame(withDerivedFields))))).toThrow()
+    const validDocument = documentFor(newGame(partialPuzzle))
+    const derivedJson = JSON.stringify({
+      ...validDocument,
+      puzzle: withDerivedFields,
+    })
+    expect(() => deserialize(derivedJson)).toThrow('invalid cage')
   })
 
   it('rejects non-canonical cage cells without mutating input', () => {
@@ -207,6 +212,87 @@ describe('M0-3 domain', () => {
       sum: 17,
     })
     expect(() => validatePuzzle(impossibleResidual)).toThrow()
+  })
+
+  it('validates minimum and maximum sums for every cage cardinality', () => {
+    for (let count = 1; count <= 9; count += 1) {
+      const candidate = structuredClone(partialPuzzle)
+      const cells = Array.from({ length: count }, (_, col) => ({ row: 2, col }))
+      const removed = new Set(cells.map(({ row, col }) => `cage-${row}-${col}`))
+      candidate.cages = candidate.cages.filter((cage) => !removed.has(cage.id))
+      for (const sum of [count * (count + 1) / 2, count * (19 - count) / 2]) {
+        const bounded = structuredClone(candidate)
+        bounded.cages.push({ id: `bounds-${count}-${sum}`, cells, sum })
+        expect(() => validatePuzzle(bounded)).not.toThrow()
+      }
+    }
+  })
+
+  it('rejects specific invalid cage structures and sums', () => {
+    const empty = structuredClone(partialPuzzle)
+    empty.cages[0].cells = []
+    expect(() => validatePuzzle(empty)).toThrow('cage cage-0-0.cells must not be empty')
+
+    const tooLarge = structuredClone(partialPuzzle)
+    tooLarge.cages = tooLarge.cages.slice(9)
+    tooLarge.cages.unshift({
+      id: 'too-large',
+      cells: [
+        ...Array.from({ length: 9 }, (_, col) => ({ row: 0, col })),
+        { row: 1, col: 0 },
+      ],
+      sum: 45,
+    })
+    expect(() => validatePuzzle(tooLarge)).toThrow('cage sum is outside its bounds')
+
+    const diagonal = structuredClone(partialPuzzle)
+    diagonal.cages = diagonal.cages.slice(2)
+    diagonal.cages.unshift({
+      id: 'diagonal',
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 1 }],
+      sum: 3,
+    })
+    expect(() => validatePuzzle(diagonal)).toThrow('cage is not connected')
+
+    const emptyId = structuredClone(partialPuzzle)
+    emptyId.cages[0].id = ''
+    expect(() => validatePuzzle(emptyId)).toThrow('invalid cage')
+
+    for (const sum of [-1, 0, 1.5]) {
+      const invalid = structuredClone(partialPuzzle)
+      invalid.cages[0].sum = sum
+      expect(() => validatePuzzle(invalid)).toThrow(sum === 1.5 ? 'invalid cage' : 'cage sum is outside its bounds')
+    }
+  })
+
+  it('rejects an impossible residual sum with an empty cage cell', () => {
+    const candidate = structuredClone(partialPuzzle)
+    candidate.cages = candidate.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+    candidate.cages.push({
+      id: 'impossible-empty-residual',
+      cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
+      sum: 18,
+    })
+    expect(() => validatePuzzle(candidate)).toThrow('cage sum is locally incompatible')
+  })
+
+  it('rejects extra puzzle fields and propagates invalid puzzles without mutation', () => {
+    const candidate = structuredClone(partialPuzzle) as typeof partialPuzzle & { grid?: unknown }
+    candidate.grid = { cells: [] }
+    const before = structuredClone(candidate)
+    const document = documentFor(newGame(partialPuzzle))
+    const invalidDocument = { ...document, puzzle: candidate }
+    const serialized = JSON.stringify(invalidDocument)
+
+    expect(() => validatePuzzle(candidate)).toThrow('invalid puzzle metadata')
+    expect(() => validatePuzzle(candidate)).toThrow('invalid puzzle metadata')
+    expect(candidate).toEqual(before)
+    expect(() => serialize(invalidDocument)).toThrow('invalid puzzle metadata')
+    expect(() => deserialize(serialized)).toThrow('invalid puzzle metadata')
+    expect(() => validateGameState(candidate, document.game)).toThrow('invalid puzzle metadata')
+    expect(() => validateSaveDocument(invalidDocument)).toThrow('invalid puzzle metadata')
+    expect(candidate).toEqual(before)
+    expect(invalidDocument.puzzle).toEqual(before)
   })
 
   it('rejects malformed puzzle cages without changing the candidate', () => {
