@@ -146,6 +146,69 @@ describe('M0-3 domain', () => {
     expect(complete(partialPuzzle, game).status).toBe('completed')
   })
 
+  it('accepts cages crossing region boundaries and rejects malformed coordinates', () => {
+    const crossing = structuredClone(partialPuzzle)
+    crossing.cages = crossing.cages.filter((cage) => !['cage-2-2', 'cage-2-3'].includes(cage.id))
+    crossing.cages.push({
+      id: 'crossing-boundary',
+      cells: [{ row: 2, col: 2 }, { row: 2, col: 3 }],
+      sum: 3,
+    })
+    expect(() => validatePuzzle(crossing)).not.toThrow()
+
+    const overlappingAcrossRegions = structuredClone(partialPuzzle)
+    overlappingAcrossRegions.cages[3].cells = [{ row: 0, col: 0 }]
+    expect(() => validatePuzzle(overlappingAcrossRegions)).toThrow('cages overlap')
+
+    const candidate = structuredClone(partialPuzzle)
+    for (const cells of [
+      [{ row: -1, col: 0 }],
+      [{ row: 9, col: 0 }],
+      [{ row: 0.5, col: 0 }],
+      [{ row: 0 }],
+      [{ row: 0, col: 0, region: 1 }],
+    ]) {
+      candidate.cages[0].cells = cells as never
+      expect(() => validatePuzzle(candidate)).toThrow()
+    }
+  })
+
+  it('accepts minimum and maximum distinct sums for a connected two-cell cage', () => {
+    for (const sum of [3, 17]) {
+      const candidate = structuredClone(partialPuzzle)
+      candidate.cages = candidate.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+      candidate.cages.push({
+        id: `two-cell-${sum}`,
+        cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
+        sum,
+      })
+      expect(() => validatePuzzle(candidate)).not.toThrow()
+    }
+  })
+
+  it('rejects malformed givens and impossible residual sums', () => {
+    for (const givens of [
+      Array.from({ length: 8 }, () => Array(9).fill(null)),
+      Array.from({ length: 9 }, () => Array(8).fill(null)),
+      Array.from({ length: 9 }, () => Array(9).fill(0)),
+      Array.from({ length: 9 }, () => Array(9).fill(10)),
+      Array.from({ length: 9 }, () => Array(9).fill(1.5)),
+    ]) {
+      const candidate = structuredClone(partialPuzzle)
+      candidate.givens = givens as (number | null)[][]
+      expect(() => validatePuzzle(candidate)).toThrow()
+    }
+
+    const impossibleResidual = structuredClone(partialPuzzle)
+    impossibleResidual.cages = impossibleResidual.cages.filter((cage) => !['cage-0-0', 'cage-1-0'].includes(cage.id))
+    impossibleResidual.cages.push({
+      id: 'impossible-residual',
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 0 }],
+      sum: 17,
+    })
+    expect(() => validatePuzzle(impossibleResidual)).toThrow()
+  })
+
   it('rejects malformed puzzle cages without changing the candidate', () => {
     for (const mutate of [
       (candidate: typeof partialPuzzle) => { candidate.cages = [] },

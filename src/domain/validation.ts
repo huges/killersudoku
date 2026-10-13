@@ -24,7 +24,9 @@ function isInteger(value: unknown): value is number {
 }
 
 export function isValidCoordinate(value: unknown): value is CellCoordinate {
-  return isRecord(value) && isInteger(value.row) && isInteger(value.col)
+  return isRecord(value) && Object.keys(value).every((key) => key === 'row' || key === 'col')
+    && Object.keys(value).length === 2
+    && isInteger(value.row) && isInteger(value.col)
     && value.row >= 0 && value.row < GRID_SIZE
     && value.col >= 0 && value.col < GRID_SIZE
 }
@@ -115,7 +117,9 @@ function possibleDistinctSums(count: number, available: number[]): Set<number> {
 }
 
 export function validatePuzzle(puzzle: PuzzleDefinition): void {
-  if (!isRecord(puzzle) || puzzle.schemaVersion !== SCHEMA_VERSION || typeof puzzle.puzzleId !== 'string' || puzzle.puzzleId.length === 0
+  if (!isRecord(puzzle)
+    || Object.keys(puzzle).some((key) => !['schemaVersion', 'puzzleId', 'difficulty', 'size', 'givens', 'cages'].includes(key))
+    || puzzle.schemaVersion !== SCHEMA_VERSION || typeof puzzle.puzzleId !== 'string' || puzzle.puzzleId.length === 0
     || !difficulties.has(puzzle.difficulty) || puzzle.size !== GRID_SIZE) validationError('invalid puzzle metadata')
   validateMatrix(puzzle.givens, 'givens', isCellValue)
   const rowSets = Array.from({ length: GRID_SIZE }, () => new Set<number>())
