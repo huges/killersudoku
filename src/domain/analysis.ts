@@ -120,14 +120,34 @@ function arithmeticCombinations(count: number, sum: number, available: number[])
   return combinations
 }
 
-function compatibleCombinations(
+function orderedCompatibleAssignments(
   arithmetic: number[][],
   remainingCells: CellCoordinate[],
   sudokuByCell: Map<string, number[]>,
 ): number[][] {
-  return arithmetic.filter((combination) => combination.every((digit, index) =>
-    (sudokuByCell.get(coordinateKey(remainingCells[index])) ?? []).includes(digit),
-  ))
+  const assignments: number[][] = []
+  for (const digits of arithmetic) {
+    const visit = (index: number, available: number[], selected: number[]): void => {
+      if (index === remainingCells.length) {
+        assignments.push([...selected])
+        return
+      }
+      const candidates = sudokuByCell.get(coordinateKey(remainingCells[index])) ?? []
+      for (const digit of available) {
+        if (candidates.includes(digit)) {
+          visit(index + 1, available.filter((candidate) => candidate !== digit), [...selected, digit])
+        }
+      }
+    }
+    visit(0, digits, [])
+  }
+  return assignments.sort((left, right) => {
+    for (let index = 0; index < left.length; index += 1) {
+      const difference = left[index] - right[index]
+      if (difference !== 0) return difference
+    }
+    return 0
+  })
 }
 
 function verificationViolations(
@@ -203,7 +223,7 @@ export function analyzeLocalFeasibility(
         cause = 'residual_sum_impossible'
         appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
       } else {
-        combinations = compatibleCombinations(arithmetic, remainingCells, sudokuByCell)
+        combinations = orderedCompatibleAssignments(arithmetic, remainingCells, sudokuByCell)
         if (combinations.length === 0) {
           cause = 'candidate_conflict'
           appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
