@@ -24,6 +24,23 @@ function pairPuzzle() {
   return puzzle
 }
 
+function candidateIsolationPuzzle(conflictCell: { row: number; col: number }, values: number[]) {
+  const puzzle = structuredClone(partialPuzzle)
+  puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+  const completion = Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, col) => {
+    const base = ((row * 3 + Math.floor(row / 3) + col) % 9)
+    return values[base]
+  }))
+  puzzle.cages = puzzle.cages.map((cage) => ({
+    ...cage,
+    sum: completion[cage.cells[0].row][cage.cells[0].col],
+  }))
+  puzzle.cages.push({ id: 'pair-0', cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }], sum: 11 })
+  puzzle.cages = puzzle.cages.filter((cage) => cage.id !== `cage-${conflictCell.row}-${conflictCell.col}`)
+  puzzle.cages.push({ id: `cage-${conflictCell.row}-${conflictCell.col}`, cells: [conflictCell], sum: completion[conflictCell.row][conflictCell.col] })
+  return puzzle
+}
+
 describe('analyzeLocalFeasibility', () => {
   it('returns combinations in residual-cell order and candidates constrained by the cage', () => {
     const puzzle = pairPuzzle()
@@ -117,30 +134,27 @@ describe('analyzeLocalFeasibility', () => {
   })
 
   it.each([
-    ['column_duplicate', { row: 1, col: 2 }, 3],
-    ['region_duplicate', { row: 1, col: 1 }, 3],
-  ] as const)('removes candidates eliminated by a %s', (_type, conflictingCell, value) => {
-    const puzzle = pairPuzzle()
-    const targetCage = puzzle.cages.find((cage) => cage.id === 'pair-0')
-    if (!targetCage) throw new Error('missing fixture cage pair-0')
-    targetCage.sum = 11
-    const conflictingCageId = `cage-${conflictingCell.row}-${conflictingCell.col}`
-    const conflictingCage = puzzle.cages.find((cage) => cage.id === conflictingCageId)
-    if (!conflictingCage) throw new Error(`missing fixture cage ${conflictingCageId}`)
-    conflictingCage.sum = value
-
+    // Independently, before the injected value, (0,2) has Sudoku candidates
+    // [3,5,6,7,8,9], while (0,3) has [3,4,5,6,7,8,9]. Enumerating ordered
+    // pairs with the first digit in (0,2), the second in (0,3), and sum 11
+    // gives (3,8), (5,6), (6,5), and (8,3). A column 6 removes (6,5); a
+    // region 5 removes (5,6). The fixture has no other active conflicts.
+    ['column_duplicate', { row: 1, col: 2 }, [3, 5, 8]],
+    ['region_duplicate', { row: 1, col: 1 }, [3, 6, 8]],
+  ] as const)('removes candidates eliminated by a %s', (_type, conflictingCell, expectedCandidates) => {
+    const puzzle = candidateIsolationPuzzle(conflictingCell, [1, 2, 3, 4, 5, 6, 7, 8, 9])
     const game = editCell(
       puzzle,
       newGame(puzzle),
       conflictingCell,
-      { value, notes: [] },
+      { value: puzzle.cages.find((cage) => cage.id === `cage-${conflictingCell.row}-${conflictingCell.col}`)?.sum ?? 0, notes: [] },
     )
 
     const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('feasible')
     if (result.status === 'invalid_input') return
     expect(result.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates)
-      .toEqual([4, 5, 6, 7, 8])
+      .toEqual(expectedCandidates)
     expect(result.violations).not.toContainEqual(expect.objectContaining({ type: _type }))
   })
 
@@ -164,9 +178,11 @@ describe('analyzeLocalFeasibility', () => {
       type: 'column_duplicate',
       cells: [{ row: 0, col: 2 }, { row: 1, col: 2 }],
     }))
+    // The given (0,0)=1 is in the same 3x3 region as both duplicate values;
+    // all three cells therefore belong to the reported violation.
     expect(result.violations).toContainEqual(expect.objectContaining({
       type: 'region_duplicate',
-      cells: [{ row: 0, col: 2 }, { row: 1, col: 2 }],
+      cells: [{ row: 0, col: 0 }, { row: 0, col: 2 }, { row: 1, col: 2 }],
     }))
     expect(result.violations).toContainEqual(expect.objectContaining({
       type: 'cage_duplicate',
@@ -246,10 +262,16 @@ describe('analyzeLocalFeasibility', () => {
     const cage = first.cages.find(({ cageId }) => cageId === 'ordered-pair')
     expect(cage).toMatchObject({
       remainingCells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
-      combinations: [[3, 8], [4, 7], [5, 6], [6, 5], [7, 4], [8, 3]],
+      // Cell (0,2) cannot contain 4 because (1,0)=4 is in its region;
+      // therefore the independent valid ordered pairs are (3,8), (5,6),
+      // (6,5), (7,4), and (8,3), preserving each digit's cell association.
+      combinations: [[3, 8], [5, 6], [6, 5], [7, 4], [8, 3]],
     })
+    // For (0,2), the given 4 in (1,0) is in the same region, so 4 is
+    // excluded; the cage then leaves [3,5,6,7,8]. Cell (0,3) has no
+    // additional given in its region, so its cage candidates are [3..8].
     expect(first.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates)
-      .toEqual([3, 4, 5, 6, 7, 8])
+      .toEqual([3, 5, 6, 7, 8])
     expect(first.candidates.find(({ cell }) => cell.row === 0 && cell.col === 3)?.candidates)
       .toEqual([3, 4, 5, 6, 7, 8])
   })
