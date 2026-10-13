@@ -74,7 +74,6 @@ export function verifyGame(
 
   const complete = grid.every((row) => row.every((value) => value !== null))
   const violations: VerificationViolation[] = []
-  currentGrid = grid
 
   const rows = Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, col) => ({ row, col })))
   const columns = Array.from({ length: 9 }, (_, col) => Array.from({ length: 9 }, (_, row) => ({ row, col })))
@@ -120,7 +119,6 @@ export function verifyGame(
     }
   }
 
-  currentGrid = []
   return {
     status: violations.length > 0 ? 'CONFLITTO' : complete ? 'VALIDA' : 'INCOMPLETA',
     complete,
