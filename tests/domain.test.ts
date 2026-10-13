@@ -4,6 +4,7 @@ import { partialPuzzle, referenceValue, solvedPuzzle } from '../src/domain/fixtu
 import { type PersistenceContract, loadDocument, saveDocument } from '../src/domain/persistence'
 import { deserialize, deriveCageData, serialize } from '../src/domain/serialization'
 import { type SaveDocument } from '../src/domain/types'
+import { verifyGame } from '../src/domain/verification'
 import { validateGameState, validatePuzzle, validateSaveDocument } from '../src/domain/validation'
 
 const cell = { row: 0, col: 2 }
@@ -111,6 +112,44 @@ describe('M0-3 domain', () => {
       expect(game.values[row][col]).toBe(referenceValue(row, col))
     }
     expect(() => validateGameState(solvedPuzzle, game)).not.toThrow()
+  })
+
+  it('preserves conflicting edits through undo, redo, and serialization round-trip', () => {
+    const initial = newGame(partialPuzzle)
+    const conflicting = editCell(partialPuzzle, initial, cell, { value: 1, notes: [] })
+    expect(conflicting.status).toBe('in_progress')
+    expect(conflicting.values[0][2]).toBe(1)
+
+    const undone = undo(partialPuzzle, conflicting)
+    expect(undone.values[0][2]).toBeNull()
+    const redone = redo(partialPuzzle, undone)
+    expect(redone.values[0][2]).toBe(1)
+
+    const serialized = serialize(documentFor(redone))
+    const restored = deserialize(serialized).game
+    expect(restored.status).toBe('in_progress')
+    expect(restored.values[0][2]).toBe(1)
+    expect(restored.history).toEqual(redone.history)
+    expect(restored.historyIndex).toBe(redone.historyIndex)
+    expect(serialized).not.toContain('CONFLITTO')
+    expect(serialized).not.toContain('VerificationResult')
+  })
+
+  it('keeps a valid grid in progress until explicit complete and rejects incomplete or conflicting games', () => {
+    const validInProgress = { ...newGame(solvedPuzzle), status: 'in_progress' as const }
+    expect(validInProgress.status).toBe('in_progress')
+    expect(verifyGame(solvedPuzzle, validInProgress.values)).toMatchObject({
+      status: 'VALIDA',
+      complete: true,
+      violations: [],
+    })
+    expect(complete(solvedPuzzle, validInProgress).status).toBe('completed')
+
+    const incomplete = { ...newGame(partialPuzzle), status: 'in_progress' as const }
+    expect(() => complete(partialPuzzle, incomplete)).toThrow()
+
+    const conflicting = editCell(partialPuzzle, newGame(partialPuzzle), cell, { value: 1, notes: [] })
+    expect(() => complete(partialPuzzle, conflicting)).toThrow()
   })
 
   it('completes a valid solved state and rejects undo and redo afterwards', () => {

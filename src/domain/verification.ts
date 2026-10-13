@@ -10,11 +10,24 @@ import { validatePuzzle, validationError } from './validation'
 const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 function validateGrid(grid: unknown): asserts grid is CellValue[][] {
-  if (!Array.isArray(grid) || grid.length !== 9
-    || grid.some((row) => !Array.isArray(row) || row.length !== 9
-      || row.some((value) => value !== null
-        && (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 9)))) {
+  if (!Array.isArray(grid) || grid.length !== 9) {
     validationError('initialGrid must be a 9x9 matrix containing null or integers from 1 to 9')
+  }
+  for (let rowIndex = 0; rowIndex < 9; rowIndex += 1) {
+    const row = grid[rowIndex]
+    if (!Array.isArray(row) || row.length !== 9) {
+      validationError('initialGrid must be a 9x9 matrix containing null or integers from 1 to 9')
+    }
+    for (let colIndex = 0; colIndex < 9; colIndex += 1) {
+      if (!Object.prototype.hasOwnProperty.call(row, colIndex)) {
+        validationError('initialGrid must be a 9x9 matrix containing null or integers from 1 to 9')
+      }
+      const value = row[colIndex]
+      if (value !== null
+        && (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 9)) {
+        validationError('initialGrid must be a 9x9 matrix containing null or integers from 1 to 9')
+      }
+    }
   }
 }
 

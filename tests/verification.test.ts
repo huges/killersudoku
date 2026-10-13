@@ -66,19 +66,48 @@ describe('verifyGame', () => {
     )).toBe(true)
 
     const reachable = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
-    reachable[0][0] = 1
-    reachable[0][1] = 2
     reachable[3][0] = 1
     reachable[3][1] = 2
-    expect(verifyGame(puzzle, reachable).violations.some((violation) => violation.cageId === 'unreachable')).toBe(false)
+    const reachableResult = verifyGame(puzzle, reachable)
+    expect(reachableResult).toMatchObject({ status: 'INCOMPLETA', complete: false, violations: [] })
   })
 
-  it('accepts a complete valid grid and rejects malformed or changed-given input', () => {
-    expect(verifyGame(solvedPuzzle, referenceGrid())).toMatchObject({ status: 'VALIDA', complete: true, violations: [] })
-    expect(() => verifyGame(partialPuzzle, Array.from({ length: 8 }, () => Array(9).fill(null)))).toThrow()
+  it('reports a partial cage sum that exceeds its target', () => {
+    const puzzle = structuredClone(partialPuzzle)
+    puzzle.givens = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    puzzle.cages = puzzle.cages.filter((cage) => !['cage-3-0', 'cage-3-1', 'cage-3-2'].includes(cage.id))
+    puzzle.cages.push({
+      id: 'exceeded',
+      cells: [{ row: 3, col: 0 }, { row: 3, col: 1 }, { row: 3, col: 2 }],
+      sum: 6,
+    })
+    const grid = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    grid[3][0] = 3
+    grid[3][1] = 4
+    const result = verifyGame(puzzle, grid)
+    expect(result.status).toBe('CONFLITTO')
+    expect(result.violations).toContainEqual(expect.objectContaining({ type: 'cage_sum_exceeded', cageId: 'exceeded' }))
+  })
+
+  it('rejects malformed, sparse, non-integer, and out-of-range grids and protects givens', () => {
+    const empty = () => Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    const sparse = empty()
+    delete sparse[4][4]
+    expect(() => verifyGame(partialPuzzle, sparse)).toThrow()
+    expect(() => verifyGame(partialPuzzle, Array.from({ length: 9 }, () => Array(9).fill(1.5)))).toThrow()
+    expect(() => verifyGame(partialPuzzle, Array.from({ length: 9 }, () => Array(9).fill(0)))).toThrow()
+    expect(() => verifyGame(partialPuzzle, Array.from({ length: 9 }, () => Array(9).fill(10)))).toThrow()
+
     const changed = partialPuzzle.givens.map((row) => [...row])
-    changed[0][0] = null
+    changed[0][0] = 2
     expect(() => verifyGame(partialPuzzle, changed)).toThrow()
+    const deleted = partialPuzzle.givens.map((row) => [...row])
+    deleted[0][0] = null
+    expect(() => verifyGame(partialPuzzle, deleted)).toThrow()
+  })
+
+  it('accepts a complete valid grid', () => {
+    expect(verifyGame(solvedPuzzle, referenceGrid())).toMatchObject({ status: 'VALIDA', complete: true, violations: [] })
   })
 
   it('does not mutate puzzle or supplied grid and keeps verification out of saves', () => {
