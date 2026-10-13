@@ -267,11 +267,11 @@ describe('M0-3 domain', () => {
 
   it('rejects an impossible residual sum with an empty cage cell', () => {
     const candidate = structuredClone(partialPuzzle)
-    candidate.cages = candidate.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+    candidate.cages = candidate.cages.filter((cage) => !['cage-0-0', 'cage-1-0', 'cage-2-0'].includes(cage.id))
     candidate.cages.push({
       id: 'impossible-empty-residual',
-      cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
-      sum: 18,
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }],
+      sum: 6,
     })
     expect(() => validatePuzzle(candidate)).toThrow('cage sum is locally incompatible')
   })
