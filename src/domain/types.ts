@@ -5,6 +5,29 @@ export type SchemaVersion = typeof SCHEMA_VERSION
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
 export type GameStatus = 'not_started' | 'in_progress' | 'paused' | 'completed'
 export type CellValue = number | null
+export type VerificationStatus = 'INCOMPLETA' | 'CONFLITTO' | 'VALIDA'
+export type VerificationViolationType =
+  | 'row_duplicate'
+  | 'column_duplicate'
+  | 'region_duplicate'
+  | 'cage_duplicate'
+  | 'cage_sum_exceeded'
+  | 'cage_sum_mismatch'
+  | 'cage_sum_unreachable'
+
+export interface VerificationViolation {
+  type: VerificationViolationType
+  cells?: CellCoordinate[]
+  cageId?: string
+  expectedSum?: number
+  actualSum?: number
+}
+
+export interface VerificationResult {
+  status: VerificationStatus
+  complete: boolean
+  violations: VerificationViolation[]
+}
 
 export interface CellCoordinate {
   row: number

@@ -5,6 +5,7 @@ import {
   type PuzzleDefinition,
 } from './types'
 import { validateCellSnapshot, validateGameState, validatePuzzle, validationError, isValidCoordinate } from './validation'
+import { verifyGame } from './verification'
 
 function cloneSnapshot(snapshot: CellSnapshot): CellSnapshot {
   return { value: snapshot.value, notes: [...snapshot.notes] }
@@ -132,6 +133,8 @@ export function complete(puzzle: PuzzleDefinition, state: GameState): GameState 
   validatePuzzle(puzzle)
   validateGameState(puzzle, state)
   if (state.status !== 'in_progress' && state.status !== 'paused') validationError('complete requires an active game')
+  const verification = verifyGame(puzzle, state.values)
+  if (verification.status !== 'VALIDA') validationError('cannot complete an incomplete or conflicting game')
   const next = cloneState(state)
   next.status = 'completed'
   validateGameState(puzzle, next)
