@@ -134,13 +134,19 @@ describe('analyzeLocalFeasibility', () => {
   })
 
   it.each([
-    // Independently, before the injected value, (0,2) has Sudoku candidates
-    // [3,5,6,7,8,9], while (0,3) has [3,4,5,6,7,8,9]. Enumerating ordered
-    // pairs with the first digit in (0,2), the second in (0,3), and sum 11
-    // gives (3,8), (5,6), (6,5), and (8,3). A column 6 removes (6,5); a
-    // region 5 removes (5,6). The fixture has no other active conflicts.
-    ['column_duplicate', { row: 1, col: 2 }, [3, 5, 8]],
-    ['region_duplicate', { row: 1, col: 1 }, [3, 6, 8]],
+    // Column fixture: before the injected 6 at (1,2), Sudoku candidates are
+    // (0,2)=[3,5,6,7,8,9] and (0,3)=[3,4,5,6,7,8,9]. The distinct ordered
+    // pairs summing to 11 are (2,9), (3,8), (4,7), (5,6), (6,5), (7,4),
+    // (8,3), and (9,2); filtering by the Sudoku candidates leaves
+    // (3,8), (5,6), (6,5), (7,4), and (8,3). The column 6 removes (6,5),
+    // so (7,4) and (8,3) remain and the first cell's final candidates are
+    // [3,5,7,8].
+    ['column_duplicate', { row: 1, col: 2 }, [3, 5, 7, 8]],
+    // Region fixture: before the injected 5 at (1,1), the same Sudoku
+    // candidates and ordered pairs apply. The region 5 removes (5,6), while
+    // (7,4) and (8,3) remain; the first cell's final candidates are
+    // [3,6,7,8].
+    ['region_duplicate', { row: 1, col: 1 }, [3, 6, 7, 8]],
   ] as const)('removes candidates eliminated by a %s', (_type, conflictingCell, expectedCandidates) => {
     const puzzle = candidateIsolationPuzzle(conflictingCell, [1, 2, 3, 4, 5, 6, 7, 8, 9])
     const game = editCell(
