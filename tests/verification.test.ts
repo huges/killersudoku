@@ -50,16 +50,27 @@ describe('verifyGame', () => {
     expect(mismatch.violations.some((violation) => violation.type === 'cage_sum_mismatch')).toBe(true)
 
     const puzzle = structuredClone(partialPuzzle)
-    puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+    puzzle.givens = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    puzzle.cages = puzzle.cages.filter((cage) => !['cage-3-0', 'cage-3-1', 'cage-3-2'].includes(cage.id))
     puzzle.cages.push({
       id: 'unreachable',
-      cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
-      sum: 17,
+      cells: [{ row: 3, col: 0 }, { row: 3, col: 1 }, { row: 3, col: 2 }],
+      sum: 6,
     })
-    const partial = referenceGrid()
-    partial[0][2] = null
-    partial[0][3] = null
-    expect(verifyGame(puzzle, partial).violations.some((violation) => violation.type === 'cage_sum_unreachable')).toBe(true)
+
+    const unreachable = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    unreachable[3][0] = 1
+    unreachable[3][1] = 4
+    expect(verifyGame(puzzle, unreachable).violations.some((violation) =>
+      violation.type === 'cage_sum_unreachable' && violation.cageId === 'unreachable',
+    )).toBe(true)
+
+    const reachable = Array.from({ length: 9 }, () => Array<CellValue>(9).fill(null))
+    reachable[0][0] = 1
+    reachable[0][1] = 2
+    reachable[3][0] = 1
+    reachable[3][1] = 2
+    expect(verifyGame(puzzle, reachable).violations.some((violation) => violation.cageId === 'unreachable')).toBe(false)
   })
 
   it('accepts a complete valid grid and rejects malformed or changed-given input', () => {
