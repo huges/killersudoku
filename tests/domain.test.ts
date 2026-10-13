@@ -220,10 +220,29 @@ describe('M0-3 domain', () => {
       const cells = Array.from({ length: count }, (_, col) => ({ row: 2, col }))
       const removed = new Set(cells.map(({ row, col }) => `cage-${row}-${col}`))
       candidate.cages = candidate.cages.filter((cage) => !removed.has(cage.id))
-      for (const sum of [count * (count + 1) / 2, count * (19 - count) / 2]) {
+      const min = count * (count + 1) / 2
+      const max = count * (19 - count) / 2
+      for (const sum of [min, max]) {
         const bounded = structuredClone(candidate)
         bounded.cages.push({ id: `bounds-${count}-${sum}`, cells, sum })
         expect(() => validatePuzzle(bounded)).not.toThrow()
+      }
+    }
+  })
+
+  it('rejects sums immediately outside the distinct-sum bounds for cardinalities two through nine', () => {
+    for (let count = 2; count <= 9; count += 1) {
+      const candidate = structuredClone(partialPuzzle)
+      const cells = Array.from({ length: count }, (_, col) => ({ row: 2, col }))
+      const removed = new Set(cells.map(({ row, col }) => `cage-${row}-${col}`))
+      candidate.cages = candidate.cages.filter((cage) => !removed.has(cage.id))
+
+      const min = count * (count + 1) / 2
+      const max = count * (19 - count) / 2
+      for (const sum of [min - 1, max + 1]) {
+        const invalid = structuredClone(candidate)
+        invalid.cages.push({ id: `outside-${count}-${sum}`, cells, sum })
+        expect(() => validatePuzzle(invalid)).toThrow('cage sum is outside its bounds')
       }
     }
   })
