@@ -62,3 +62,11 @@ Le funzioni sono disponibili in `src/domain/game.ts`, i validatori in `src/domai
 L'omissione della griglia iniziale produce una copia dei givens con le altre celle vuote. Le griglie fornite devono contenere soltanto `null` o interi da 1 a 9 e non possono modificare i givens; gli input malformati sono rifiutati come errori di validazione. Una griglia completa ma conflittuale resta `CONFLITTO`.
 
 `complete` invoca esplicitamente `verifyGame` e porta lo stato a `completed` soltanto per un esito `VALIDA`. Gli stati intermedi conflittuali rimangono validi e persistibili secondo le invarianti esistenti. Solver, ricerca e conteggio delle soluzioni non fanno parte di questo incremento.
+
+## M1-3 — Candidati e fattibilità locale
+
+`analyzeLocalFeasibility(puzzle, game)` è una funzione pura separata dal percorso di modifica della partita. Valida `PuzzleDefinition` e `GameState`, riutilizza `verifyGame` per i conflitti correnti e calcola, per ogni gabbia, le assegnazioni alle sole celle residue nell’ordine canonico row/column. Le combinazioni e i candidati sono deterministici e non modificano valori, note, givens, stato, persistenza o cronologia.
+
+Il risultato può essere `invalid_input`, `feasible` o `infeasible`. `infeasible` descrive soltanto la griglia corrente rispetto ai vincoli locali verificati: non dimostra che il puzzle originale sia insolubile. Analogamente, `feasible` non dimostra la solvibilità globale. Le cause locali distinguono una somma residua irraggiungibile con cifre distinte (`residual_sum_impossible`) dall’assenza di assegnazioni compatibili con i candidati Sudoku (`candidate_conflict`). Una gabbia completa valida restituisce `combinations = [[]]`; una gabbia non fattibile restituisce combinazioni e candidati vuoti.
+
+L’analisi deve essere richiesta esplicitamente da interfaccia, test o strumenti diagnostici: l’inserimento, la cancellazione, undo/redo e la persistenza continuano a usare le operazioni esistenti senza avviare solver o correggere automaticamente la griglia.

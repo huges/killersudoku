@@ -48,8 +48,16 @@ function coordinateKey(cell: CellCoordinate): string {
   return `${cell.row}:${cell.col}`
 }
 
+function compareCells(left: CellCoordinate, right: CellCoordinate): number {
+  return left.row - right.row || left.col - right.col
+}
+
 function cloneCells(cells: CellCoordinate[]): CellCoordinate[] {
   return cells.map((cell) => ({ ...cell }))
+}
+
+function canonicalCells(cells: CellCoordinate[]): CellCoordinate[] {
+  return cloneCells(cells).sort(compareCells)
 }
 
 function sudokuCandidates(game: GameState, cell: CellCoordinate): number[] {
@@ -105,7 +113,7 @@ function verificationViolations(
 ): AnalysisViolation[] {
   return violations.map((violation) => ({
     type: violation.type,
-    cells: cloneCells(violation.cells ?? (violation.cageId
+    cells: canonicalCells(violation.cells ?? (violation.cageId
       ? puzzle.cages.find((cage) => cage.id === violation.cageId)?.cells ?? []
       : [])),
     ...(violation.cageId === undefined ? {} : { cageId: violation.cageId }),
@@ -139,7 +147,7 @@ export function analyzeLocalFeasibility(
   const cages: CageFeasibility[] = []
   const cageCandidates = new Map<string, Set<number>>()
   for (const cage of puzzle.cages) {
-    const cells = cloneCells(cage.cells)
+    const cells = canonicalCells(cage.cells)
     const present = cells
       .map((cell) => game.values[cell.row][cell.col])
       .filter((value): value is number => value !== null)
