@@ -109,15 +109,28 @@ describe('analyzeLocalFeasibility', () => {
     ['column_duplicate', { row: 1, col: 2 }, 3],
     ['region_duplicate', { row: 1, col: 1 }, 3],
   ] as const)('removes candidates eliminated by a %s', (_type, conflictingCell, value) => {
-    const puzzle = structuredClone(partialPuzzle)
-    const game = newGame(puzzle)
-    game.values[conflictingCell.row][conflictingCell.col] = value
+    const puzzle = pairPuzzle()
+    const targetCage = puzzle.cages.find((cage) => cage.id === 'pair-0')
+    if (!targetCage) throw new Error('missing fixture cage pair-0')
+    targetCage.sum = 11
+    const conflictingCageId = `cage-${conflictingCell.row}-${conflictingCell.col}`
+    const conflictingCage = puzzle.cages.find((cage) => cage.id === conflictingCageId)
+    if (!conflictingCage) throw new Error(`missing fixture cage ${conflictingCageId}`)
+    conflictingCage.sum = value
+
+    const game = editCell(
+      puzzle,
+      newGame(puzzle),
+      conflictingCell,
+      { value, notes: [] },
+    )
 
     const result = analyzeLocalFeasibility(puzzle, game)
-    expect(result.status).toBe('infeasible')
+    expect(result.status).toBe('feasible')
     if (result.status === 'invalid_input') return
-    expect(result.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates).toEqual([])
-    expect(result.violations).toContainEqual(expect.objectContaining({ type: _type }))
+    expect(result.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates)
+      .toEqual([4, 5, 6, 7, 8])
+    expect(result.violations).not.toContainEqual(expect.objectContaining({ type: _type }))
   })
 
   it('reports column, region and cage duplicates with all involved cells', () => {
@@ -125,13 +138,13 @@ describe('analyzeLocalFeasibility', () => {
     puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
     puzzle.cages.push({
       id: 'duplicate-pair',
-      cells: [{ row: 0, col: 3 }, { row: 0, col: 2 }],
+      cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
       sum: 3,
     })
-    const game = newGame(puzzle)
-    game.values[0][2] = 1
-    game.values[0][3] = 1
-    game.values[1][2] = 1
+    let game = newGame(puzzle)
+    game = editCell(puzzle, game, { row: 0, col: 2 }, { value: 1, notes: [] })
+    game = editCell(puzzle, game, { row: 0, col: 3 }, { value: 1, notes: [] })
+    game = editCell(puzzle, game, { row: 1, col: 2 }, { value: 1, notes: [] })
 
     const result = analyzeLocalFeasibility(puzzle, game)
     expect(result.status).toBe('infeasible')
@@ -167,15 +180,15 @@ describe('analyzeLocalFeasibility', () => {
 
   it('reports a partial cage duplicate with empty combinations and candidates', () => {
     const puzzle = structuredClone(partialPuzzle)
-    puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+    puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3', 'cage-0-4'].includes(cage.id))
     puzzle.cages.push({
       id: 'partial-duplicate',
       cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }, { row: 0, col: 4 }],
       sum: 12,
     })
-    const game = newGame(puzzle)
-    game.values[0][2] = 5
-    game.values[0][3] = 5
+    let game = newGame(puzzle)
+    game = editCell(puzzle, game, { row: 0, col: 2 }, { value: 5, notes: [] })
+    game = editCell(puzzle, game, { row: 0, col: 3 }, { value: 5, notes: [] })
 
     const result = analyzeLocalFeasibility(puzzle, game)
     expect(result.status).toBe('infeasible')
@@ -210,7 +223,7 @@ describe('analyzeLocalFeasibility', () => {
     puzzle.cages = puzzle.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
     puzzle.cages.push({
       id: 'ordered-pair',
-      cells: [{ row: 0, col: 3 }, { row: 0, col: 2 }],
+      cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
       sum: 11,
     })
     const game = newGame(puzzle)
