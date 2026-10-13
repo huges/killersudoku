@@ -54,3 +54,11 @@ Il documento ha forma:
 ## API di dominio
 
 Le funzioni sono disponibili in `src/domain/game.ts`, i validatori in `src/domain/validation.ts`, il contratto in `src/domain/persistence.ts`, e serializzazione/derivazioni in `src/domain/serialization.ts`. Le fixture deterministiche sono in `src/domain/fixtures.ts` e i test di dominio in `tests/domain.test.ts`.
+
+## Verifica M1-2
+
+`verifyGame` in `src/domain/verification.ts` valida una matrice 9×9 associata al puzzle e restituisce l'esito derivato `INCOMPLETA`, `CONFLITTO` o `VALIDA`, senza aggiungere dati a `GameState` o al documento di salvataggio. Controlla duplicati in righe, colonne, riquadri e gabbie, oltre alle somme complete e alla raggiungibilità locale delle somme parziali tramite cifre distinte.
+
+L'omissione della griglia iniziale produce una copia dei givens con le altre celle vuote. Le griglie fornite devono contenere soltanto `null` o interi da 1 a 9 e non possono modificare i givens; gli input malformati sono rifiutati come errori di validazione. Una griglia completa ma conflittuale resta `CONFLITTO`.
+
+`complete` invoca esplicitamente `verifyGame` e porta lo stato a `completed` soltanto per un esito `VALIDA`. Gli stati intermedi conflittuali rimangono validi e persistibili secondo le invarianti esistenti. Solver, ricerca e conteggio delle soluzioni non fanno parte di questo incremento.
