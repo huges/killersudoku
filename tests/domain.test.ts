@@ -4,7 +4,7 @@ import { partialPuzzle, referenceValue, solvedPuzzle } from '../src/domain/fixtu
 import { type PersistenceContract, loadDocument, saveDocument } from '../src/domain/persistence'
 import { deserialize, deriveCageData, serialize } from '../src/domain/serialization'
 import { type SaveDocument } from '../src/domain/types'
-import { validateGameState, validatePuzzle } from '../src/domain/validation'
+import { validateGameState, validatePuzzle, validateSaveDocument } from '../src/domain/validation'
 
 const cell = { row: 0, col: 2 }
 const snapshot = { value: 3, notes: [] }
@@ -29,7 +29,12 @@ describe('M0-3 domain', () => {
     ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).labelAnchor = { row: 0, col: 0 }
     ;(withDerivedFields.cages[0] as typeof withDerivedFields.cages[0] & { labelAnchor?: unknown; label?: unknown }).label = '1'
     expect(() => validatePuzzle(withDerivedFields)).toThrow()
-    expect(() => deserialize(JSON.stringify(documentFor(newGame(withDerivedFields))))).toThrow()
+    const validDocument = documentFor(newGame(partialPuzzle))
+    const derivedJson = JSON.stringify({
+      ...validDocument,
+      puzzle: withDerivedFields,
+    })
+    expect(() => deserialize(derivedJson)).toThrow('invalid cage')
   })
 
   it('rejects non-canonical cage cells without mutating input', () => {
@@ -144,6 +149,169 @@ describe('M0-3 domain', () => {
     expect(game.history.length).toBe(78)
     expect(() => validateGameState(partialPuzzle, game)).not.toThrow()
     expect(complete(partialPuzzle, game).status).toBe('completed')
+  })
+
+  it('accepts cages crossing region boundaries and rejects malformed coordinates', () => {
+    const crossing = structuredClone(partialPuzzle)
+    crossing.cages = crossing.cages.filter((cage) => !['cage-2-2', 'cage-2-3'].includes(cage.id))
+    crossing.cages.push({
+      id: 'crossing-boundary',
+      cells: [{ row: 2, col: 2 }, { row: 2, col: 3 }],
+      sum: 3,
+    })
+    expect(() => validatePuzzle(crossing)).not.toThrow()
+
+    const overlappingAcrossRegions = structuredClone(partialPuzzle)
+    overlappingAcrossRegions.cages[3].cells = [{ row: 0, col: 0 }]
+    expect(() => validatePuzzle(overlappingAcrossRegions)).toThrow('cages overlap')
+
+    const candidate = structuredClone(partialPuzzle)
+    for (const cells of [
+      [{ row: -1, col: 0 }],
+      [{ row: 9, col: 0 }],
+      [{ row: 0.5, col: 0 }],
+      [{ row: 0 }],
+      [{ row: 0, col: 0, region: 1 }],
+    ]) {
+      candidate.cages[0].cells = cells as never
+      expect(() => validatePuzzle(candidate)).toThrow()
+    }
+  })
+
+  it('accepts minimum and maximum distinct sums for a connected two-cell cage', () => {
+    for (const sum of [3, 17]) {
+      const candidate = structuredClone(partialPuzzle)
+      candidate.cages = candidate.cages.filter((cage) => !['cage-0-2', 'cage-0-3'].includes(cage.id))
+      candidate.cages.push({
+        id: `two-cell-${sum}`,
+        cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }],
+        sum,
+      })
+      expect(() => validatePuzzle(candidate)).not.toThrow()
+    }
+  })
+
+  it('rejects malformed givens and impossible residual sums', () => {
+    for (const givens of [
+      Array.from({ length: 8 }, () => Array(9).fill(null)),
+      Array.from({ length: 9 }, () => Array(8).fill(null)),
+      Array.from({ length: 9 }, () => Array(9).fill(0)),
+      Array.from({ length: 9 }, () => Array(9).fill(10)),
+      Array.from({ length: 9 }, () => Array(9).fill(1.5)),
+    ]) {
+      const candidate = structuredClone(partialPuzzle)
+      candidate.givens = givens as (number | null)[][]
+      expect(() => validatePuzzle(candidate)).toThrow()
+    }
+
+    const impossibleResidual = structuredClone(partialPuzzle)
+    impossibleResidual.cages = impossibleResidual.cages.filter((cage) => !['cage-0-0', 'cage-1-0'].includes(cage.id))
+    impossibleResidual.cages.push({
+      id: 'impossible-residual',
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 0 }],
+      sum: 17,
+    })
+    expect(() => validatePuzzle(impossibleResidual)).toThrow()
+  })
+
+  it('validates minimum and maximum sums for every cage cardinality', () => {
+    for (let count = 1; count <= 9; count += 1) {
+      const candidate = structuredClone(partialPuzzle)
+      const cells = Array.from({ length: count }, (_, col) => ({ row: 2, col }))
+      const removed = new Set(cells.map(({ row, col }) => `cage-${row}-${col}`))
+      candidate.cages = candidate.cages.filter((cage) => !removed.has(cage.id))
+      const min = count * (count + 1) / 2
+      const max = count * (19 - count) / 2
+      for (const sum of [min, max]) {
+        const bounded = structuredClone(candidate)
+        bounded.cages.push({ id: `bounds-${count}-${sum}`, cells, sum })
+        expect(() => validatePuzzle(bounded)).not.toThrow()
+      }
+    }
+  })
+
+  it('rejects sums immediately outside the distinct-sum bounds for cardinalities two through nine', () => {
+    for (let count = 2; count <= 9; count += 1) {
+      const candidate = structuredClone(partialPuzzle)
+      const cells = Array.from({ length: count }, (_, col) => ({ row: 2, col }))
+      const removed = new Set(cells.map(({ row, col }) => `cage-${row}-${col}`))
+      candidate.cages = candidate.cages.filter((cage) => !removed.has(cage.id))
+
+      const min = count * (count + 1) / 2
+      const max = count * (19 - count) / 2
+      for (const sum of [min - 1, max + 1]) {
+        const invalid = structuredClone(candidate)
+        invalid.cages.push({ id: `outside-${count}-${sum}`, cells, sum })
+        expect(() => validatePuzzle(invalid)).toThrow('cage sum is outside its bounds')
+      }
+    }
+  })
+
+  it('rejects specific invalid cage structures and sums', () => {
+    const empty = structuredClone(partialPuzzle)
+    empty.cages[0].cells = []
+    expect(() => validatePuzzle(empty)).toThrow('cage cage-0-0.cells must not be empty')
+
+    const tooLarge = structuredClone(partialPuzzle)
+    tooLarge.cages = tooLarge.cages.slice(9)
+    tooLarge.cages.unshift({
+      id: 'too-large',
+      cells: [
+        ...Array.from({ length: 9 }, (_, col) => ({ row: 0, col })),
+        { row: 1, col: 0 },
+      ],
+      sum: 45,
+    })
+    expect(() => validatePuzzle(tooLarge)).toThrow('cage sum is outside its bounds')
+
+    const diagonal = structuredClone(partialPuzzle)
+    diagonal.cages = diagonal.cages.slice(2)
+    diagonal.cages.unshift({
+      id: 'diagonal',
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 1 }],
+      sum: 3,
+    })
+    expect(() => validatePuzzle(diagonal)).toThrow('cage is not connected')
+
+    const emptyId = structuredClone(partialPuzzle)
+    emptyId.cages[0].id = ''
+    expect(() => validatePuzzle(emptyId)).toThrow('invalid cage')
+
+    for (const sum of [-1, 0, 1.5]) {
+      const invalid = structuredClone(partialPuzzle)
+      invalid.cages[0].sum = sum
+      expect(() => validatePuzzle(invalid)).toThrow(sum === 1.5 ? 'invalid cage' : 'cage sum is outside its bounds')
+    }
+  })
+
+  it('rejects an impossible residual sum with an empty cage cell', () => {
+    const candidate = structuredClone(partialPuzzle)
+    candidate.cages = candidate.cages.filter((cage) => !['cage-0-0', 'cage-1-0', 'cage-2-0'].includes(cage.id))
+    candidate.cages.push({
+      id: 'impossible-empty-residual',
+      cells: [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }],
+      sum: 6,
+    })
+    expect(() => validatePuzzle(candidate)).toThrow('cage sum is locally incompatible')
+  })
+
+  it('rejects extra puzzle fields and propagates invalid puzzles without mutation', () => {
+    const candidate = structuredClone(partialPuzzle) as typeof partialPuzzle & { grid?: unknown }
+    candidate.grid = { cells: [] }
+    const before = structuredClone(candidate)
+    const document = documentFor(newGame(partialPuzzle))
+    const invalidDocument = { ...document, puzzle: candidate }
+    const serialized = JSON.stringify(invalidDocument)
+
+    expect(() => validatePuzzle(candidate)).toThrow('invalid puzzle metadata')
+    expect(() => validatePuzzle(candidate)).toThrow('invalid puzzle metadata')
+    expect(candidate).toEqual(before)
+    expect(() => serialize(invalidDocument)).toThrow('invalid puzzle metadata')
+    expect(() => deserialize(serialized)).toThrow('invalid puzzle metadata')
+    expect(() => validateGameState(candidate, document.game)).toThrow('invalid puzzle metadata')
+    expect(() => validateSaveDocument(invalidDocument)).toThrow('invalid puzzle metadata')
+    expect(candidate).toEqual(before)
+    expect(invalidDocument.puzzle).toEqual(before)
   })
 
   it('rejects malformed puzzle cages without changing the candidate', () => {

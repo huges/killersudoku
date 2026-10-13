@@ -17,7 +17,7 @@ Sono esclusi timer attivo, UI giocabile, solver/backtracking, motore completo di
 
 Le coordinate persistite sono oggetti `{ row, col }` zero-based nella griglia 9×9. Puzzle e partita usano schema version `1.0`; `puzzleId` collega lo stato al puzzle e la difficoltà è una delle modalità supportate (`easy`, `medium`, `hard`, `expert`).
 
-Le gabbie coprono esattamente la griglia, senza sovrapposizioni o duplicati, sono ortogonalmente connesse e hanno celle in ordine canonico row/col. La somma rispetta i limiti delle cifre distinte e la compatibilità con i givens è verificata localmente; ciò non dimostra la risolvibilità globale.
+Le gabbie coprono esattamente la griglia, senza sovrapposizioni o duplicati, sono ortogonalmente connesse e hanno celle in ordine canonico row/col. La somma rispetta i limiti delle cifre distinte e la compatibilità con i givens è verificata localmente; ciò non dimostra la risolvibilità globale. `validatePuzzle` è il punto d’ingresso unico: accetta esclusivamente la forma `PuzzleDefinition` versione `1.0`, con coordinate zero-based `{ row, col }`, e rifiuta campi extra o forme derivate.
 
 `labelAnchor` e il testo dell’etichetta sono dati derivati: l’ancora è la prima cella canonica e il testo deriva dalla somma. Nessuno dei due è persistito.
 
