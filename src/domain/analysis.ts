@@ -27,6 +27,8 @@ export interface CellCandidates {
 }
 
 export interface AnalysisViolation {
+  // `cage_sum_unreachable` is already part of VerificationViolationType (M1-2).
+  // Keep the existing domain union; local causes remain distinguished by `cause`.
   type: VerificationViolationType | 'cage_duplicate' | 'cage_sum_mismatch'
   cause?: LocalCause
   cells: CellCoordinate[]

@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { analyzeLocalFeasibility } from '../src/domain/analysis'
 import { editCell, newGame } from '../src/domain/game'
 import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
+import { validateGameState, validatePuzzle } from '../src/domain/validation'
+
+function analyzeValid(
+  puzzle: Parameters<typeof analyzeLocalFeasibility>[0],
+  game: Parameters<typeof analyzeLocalFeasibility>[1],
+) {
+  validatePuzzle(puzzle)
+  validateGameState(puzzle, game)
+  return analyzeLocalFeasibility(puzzle, game)
+}
 
 function pairPuzzle() {
   const puzzle = structuredClone(partialPuzzle)
@@ -16,7 +26,8 @@ function pairPuzzle() {
 
 describe('analyzeLocalFeasibility', () => {
   it('returns combinations in residual-cell order and candidates constrained by the cage', () => {
-    const result = analyzeLocalFeasibility(pairPuzzle(), newGame(pairPuzzle()))
+    const puzzle = pairPuzzle()
+    const result = analyzeValid(puzzle, newGame(puzzle))
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     const cage = result.cages.find((candidate) => candidate.cageId === 'pair-0')
@@ -33,7 +44,7 @@ describe('analyzeLocalFeasibility', () => {
   it('distinguishes an arithmetically impossible residual sum', () => {
     const puzzle = pairPuzzle()
     const game = editCell(puzzle, newGame(puzzle), { row: 0, col: 2 }, { value: 3, notes: [] })
-    const result = analyzeLocalFeasibility(puzzle, game)
+    const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     expect(result.cages.find(({ cageId }) => cageId === 'pair-0')).toMatchObject({
@@ -49,7 +60,7 @@ describe('analyzeLocalFeasibility', () => {
   })
 
   it('represents a complete valid cage with one empty assignment', () => {
-    const result = analyzeLocalFeasibility(solvedPuzzle, newGame(solvedPuzzle))
+    const result = analyzeValid(solvedPuzzle, newGame(solvedPuzzle))
     expect(result.status).toBe('feasible')
     if (result.status === 'invalid_input') return
     expect(result.cages[0]).toMatchObject({ combinations: [[]], status: 'feasible', remainingCells: [] })
@@ -58,7 +69,7 @@ describe('analyzeLocalFeasibility', () => {
 
   it('reports a complete cage sum mismatch without retaining candidates', () => {
     const game = editCell(partialPuzzle, newGame(partialPuzzle), { row: 0, col: 2 }, { value: 4, notes: [] })
-    const result = analyzeLocalFeasibility(partialPuzzle, game)
+    const result = analyzeValid(partialPuzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     expect(result.cages.find(({ cageId }) => cageId === 'cage-0-2')).toMatchObject({
@@ -71,7 +82,7 @@ describe('analyzeLocalFeasibility', () => {
 
   it('uses verifyGame conflicts, including conflicts across cages', () => {
     const game = editCell(partialPuzzle, newGame(partialPuzzle), { row: 0, col: 2 }, { value: 1, notes: [] })
-    const result = analyzeLocalFeasibility(partialPuzzle, game)
+    const result = analyzeValid(partialPuzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     expect(result.violations).toContainEqual(expect.objectContaining({
@@ -100,7 +111,7 @@ describe('analyzeLocalFeasibility', () => {
     const game = newGame(puzzle)
     const puzzleBefore = structuredClone(puzzle)
     const gameBefore = structuredClone(game)
-    analyzeLocalFeasibility(puzzle, game)
+    analyzeValid(puzzle, game)
     expect(puzzle).toEqual(puzzleBefore)
     expect(game).toEqual(gameBefore)
   })
@@ -125,7 +136,7 @@ describe('analyzeLocalFeasibility', () => {
       { value, notes: [] },
     )
 
-    const result = analyzeLocalFeasibility(puzzle, game)
+    const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('feasible')
     if (result.status === 'invalid_input') return
     expect(result.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates)
@@ -146,7 +157,7 @@ describe('analyzeLocalFeasibility', () => {
     game = editCell(puzzle, game, { row: 0, col: 3 }, { value: 1, notes: [] })
     game = editCell(puzzle, game, { row: 1, col: 2 }, { value: 1, notes: [] })
 
-    const result = analyzeLocalFeasibility(puzzle, game)
+    const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     expect(result.violations).toContainEqual(expect.objectContaining({
@@ -190,7 +201,7 @@ describe('analyzeLocalFeasibility', () => {
     game = editCell(puzzle, game, { row: 0, col: 2 }, { value: 5, notes: [] })
     game = editCell(puzzle, game, { row: 0, col: 3 }, { value: 5, notes: [] })
 
-    const result = analyzeLocalFeasibility(puzzle, game)
+    const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     expect(result.cages.find(({ cageId }) => cageId === 'partial-duplicate')).toMatchObject({
@@ -209,7 +220,7 @@ describe('analyzeLocalFeasibility', () => {
 
   it('deduplicates a cage sum mismatch already reported by verifyGame', () => {
     const game = editCell(partialPuzzle, newGame(partialPuzzle), { row: 0, col: 2 }, { value: 4, notes: [] })
-    const result = analyzeLocalFeasibility(partialPuzzle, game)
+    const result = analyzeValid(partialPuzzle, game)
     expect(result.status).toBe('infeasible')
     if (result.status === 'invalid_input') return
     const mismatches = result.violations.filter((violation) =>
@@ -227,8 +238,8 @@ describe('analyzeLocalFeasibility', () => {
       sum: 11,
     })
     const game = newGame(puzzle)
-    const first = analyzeLocalFeasibility(puzzle, game)
-    const second = analyzeLocalFeasibility(puzzle, game)
+    const first = analyzeValid(puzzle, game)
+    const second = analyzeValid(puzzle, game)
     expect(first).toEqual(second)
     expect(first.status).toBe('feasible')
     if (first.status === 'invalid_input') return
@@ -248,7 +259,7 @@ describe('analyzeLocalFeasibility', () => {
     puzzle.cages = puzzle.cages.filter((cage) => cage.id !== 'pair-0')
     puzzle.cages.push({ id: 'global-check-pair', cells: [{ row: 0, col: 2 }, { row: 0, col: 3 }], sum: 11 })
     const game = newGame(puzzle)
-    const result = analyzeLocalFeasibility(puzzle, game)
+    const result = analyzeValid(puzzle, game)
     expect(result.status).toBe('feasible')
     expect(game.status).toBe('not_started')
     expect(game.values.flat().some((value) => value === null)).toBe(true)
