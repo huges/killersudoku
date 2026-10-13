@@ -107,11 +107,12 @@ export function verifyGame(
     const actualSum = present.reduce((sum, value) => sum + value, 0)
     if (actualSum > cage.sum) {
       violations.push({ type: 'cage_sum_exceeded', cageId: cage.id, expectedSum: cage.sum, actualSum })
-    } else if (present.length === cage.cells.length) {
+    }
+    if (present.length === cage.cells.length) {
       if (actualSum !== cage.sum) {
         violations.push({ type: 'cage_sum_mismatch', cageId: cage.id, expectedSum: cage.sum, actualSum })
       }
-    } else {
+    } else if (actualSum <= cage.sum) {
       const available = DIGITS.filter((digit) => !present.includes(digit))
       if (!availableSums(cage.cells.length - present.length, available).has(cage.sum - actualSum)) {
         violations.push({ type: 'cage_sum_unreachable', cageId: cage.id, expectedSum: cage.sum, actualSum })
