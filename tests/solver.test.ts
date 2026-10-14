@@ -74,7 +74,10 @@ describe('deterministic solver', () => {
 
     const multiple = multiplePuzzle()
     validatePuzzle(multiple)
-    const first = solvedPuzzle.givens.map((row) => [...row])
+    const first = solvedPuzzle.givens.map((row) => row.map((value) => {
+      if (value === null) throw new Error('The reference solution must be complete')
+      return value
+    }))
     const second = [first[1], first[0], ...first.slice(2)].map((row) => [...row])
     assertCompleteSolution(multiple, first)
     assertCompleteSolution(multiple, second)
@@ -83,8 +86,10 @@ describe('deterministic solver', () => {
     expect(result.status).toBe('multiple')
     expect(result.count).toBe(2)
     expect(result.complete).toBe(true)
-    // DFS enters the root, then the two row-swap branches; the first solution is the fixture grid.
-    expect(result.nodes).toBe(3)
+    // The root branches at (0,0), then (0,1), then (0,2).
+    // Each choice propagates one independent digit cycle across the two rows.
+    // Node 4 is the first solution; the alternate final branch is node 5.
+    expect(result.nodes).toBe(5)
     expect(result.solution).toEqual(first)
   })
 
@@ -119,13 +124,9 @@ describe('deterministic solver', () => {
   })
 
   it('keeps cage assignments positional and candidate unions positional', () => {
-    const puzzle = clone(partialPuzzle)
+    const puzzle = clone(solvedPuzzle)
     puzzle.givens[0][0] = null
     puzzle.givens[0][1] = null
-    puzzle.givens[3][0] = 2
-    puzzle.givens[3][1] = 1
-    puzzle.cages.find((cage) => cage.id === 'cage-3-0')!.sum = 2
-    puzzle.cages.find((cage) => cage.id === 'cage-3-1')!.sum = 1
     puzzle.cages = puzzle.cages.filter((cage) => cage.id !== 'cage-0-0' && cage.id !== 'cage-0-1')
     puzzle.cages.push({ id: 'pair', cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }], sum: 3 })
     validatePuzzle(puzzle)
@@ -183,8 +184,12 @@ describe('deterministic solver', () => {
 
     const ambiguous = ambiguousPairPuzzle()
     validatePuzzle(ambiguous)
-    expect(solve(ambiguous, { maxNodes: 2 })).toMatchObject({
-      status: 'incomplete', count: 1, complete: false, nodes: 2,
+    expect(solve(ambiguous, { maxNodes: 3 })).toMatchObject({
+      status: 'incomplete', count: 0, complete: false, nodes: 3,
+      reason: 'maxNodes reached before classification',
+    })
+    expect(solve(ambiguous, { maxNodes: 4 })).toMatchObject({
+      status: 'incomplete', count: 1, complete: false, nodes: 4,
       reason: 'maxNodes reached before uniqueness was proven',
     })
   })
@@ -192,8 +197,8 @@ describe('deterministic solver', () => {
   it('stops on the second solution at the exact permitted node', () => {
     const puzzle = ambiguousPairPuzzle()
     validatePuzzle(puzzle)
-    const result = solve(puzzle, { maxNodes: 3 })
-    expect(result).toMatchObject({ status: 'multiple', count: 2, complete: true, nodes: 3 })
+    const result = solve(puzzle, { maxNodes: 5 })
+    expect(result).toMatchObject({ status: 'multiple', count: 2, complete: true, nodes: 5 })
   })
 
   it('classifies an exhausted search conclusively at its exact node limit', () => {
