@@ -21,6 +21,17 @@ export function getSudokuCandidates(grid: SearchGrid, cell: CellCoordinate): num
 function compareCells(a: CellCoordinate, b: CellCoordinate): number { return a.row - b.row || a.col - b.col }
 function key(cell: CellCoordinate): string { return `${cell.row}:${cell.col}` }
 
+export function hasArithmeticCombination(count: number, sum: number, available: number[]): boolean {
+  const visit = (start: number, left: number, remaining: number): boolean => {
+    if (remaining === 0) return left === 0
+    for (let index = start; index <= available.length - remaining; index += 1) {
+      if (visit(index + 1, left - available[index], remaining - 1)) return true
+    }
+    return false
+  }
+  return visit(0, sum, count)
+}
+
 export function getCageCombinations(grid: SearchGrid, cage: Cage): number[][] {
   const cells = [...cage.cells].sort(compareCells)
   const present = cells.map((cell) => grid[cell.row][cell.col]).filter((v): v is number => v !== null)
