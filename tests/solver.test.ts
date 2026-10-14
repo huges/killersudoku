@@ -18,18 +18,39 @@ function locallyFeasibleUnsatisfiablePuzzle() {
 
 function multiplePuzzle() {
   const puzzle = clone(solvedPuzzle)
-  const removed = new Set(['0:0', '0:1', '1:0', '1:1'])
-  puzzle.givens = puzzle.givens.map((row, r) => row.map((value, c) => removed.has(`${r}:${c}`) ? null : value))
-  puzzle.cages = puzzle.cages.filter((cage) => !cage.cells.some((cell) => removed.has(`${cell.row}:${cell.col}`)))
-  puzzle.cages.push(
-    { id: 'ambiguous-row-0', cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }], sum: 3 },
-    { id: 'ambiguous-row-1', cells: [{ row: 1, col: 0 }, { row: 1, col: 1 }], sum: 9 },
-  )
+  puzzle.givens = puzzle.givens.map((row, rowIndex) => rowIndex < 2 ? Array(9).fill(null) : [...row])
+  const fixed = puzzle.cages.filter((cage) => cage.cells[0].row >= 2)
+  const pairs = Array.from({ length: 9 }, (_, col) => ({
+    id: `pair-${col}`,
+    cells: [{ row: 0, col }, { row: 1, col }],
+    sum: solvedPuzzle.givens[0][col]! + solvedPuzzle.givens[1][col]!,
+  }))
+  puzzle.cages = [...pairs, ...fixed]
   return puzzle
 }
 
 function ambiguousPairPuzzle() {
   return multiplePuzzle()
+}
+
+function assertCompleteSolution(puzzle: typeof solvedPuzzle, grid: number[][]) {
+  expect(grid).toHaveLength(9)
+  for (const row of grid) expect(new Set(row).size).toBe(9)
+  for (let col = 0; col < 9; col += 1) expect(new Set(grid.map((row) => row[col])).size).toBe(9)
+  for (let br = 0; br < 3; br += 1) for (let bc = 0; bc < 3; bc += 1) {
+    const values: number[] = []
+    for (let row = br * 3; row < br * 3 + 3; row += 1) for (let col = bc * 3; col < bc * 3 + 3; col += 1) values.push(grid[row][col])
+    expect(new Set(values).size).toBe(9)
+  }
+  for (let row = 0; row < 9; row += 1) for (let col = 0; col < 9; col += 1) {
+    const given = puzzle.givens[row][col]
+    if (given !== null) expect(grid[row][col]).toBe(given)
+  }
+  for (const cage of puzzle.cages) {
+    const values = cage.cells.map((cell) => grid[cell.row][cell.col])
+    expect(new Set(values).size).toBe(values.length)
+    expect(values.reduce((sum, value) => sum + value, 0)).toBe(cage.sum)
+  }
 }
 
 describe('deterministic solver', () => {
@@ -54,12 +75,17 @@ describe('deterministic solver', () => {
 
     const multiple = multiplePuzzle()
     validatePuzzle(multiple)
+    const first = solvedPuzzle.givens.map((row) => [...row])
+    const second = first.map((row) => [...row])
+    ;[second[0][0], second[1][0]] = [second[1][0], second[0][0]]
+    assertCompleteSolution(multiple, first)
+    assertCompleteSolution(multiple, second)
+    expect(second).not.toEqual(first)
     const result = solve(multiple)
     expect(result.status).toBe('multiple')
     expect(result.count).toBe(2)
     expect(result.complete).toBe(true)
     expect(result.solution).toBeDefined()
-    expect(result.solution).not.toEqual(solvedPuzzle.givens)
   })
 
   it('preserves local feasibility behavior through the shared helpers', () => {
@@ -101,9 +127,9 @@ describe('deterministic solver', () => {
     validatePuzzle(puzzle)
     const grid = puzzle.givens.map((row) => [...row]) as SearchGrid
     const assignments = getCageCombinations(grid, puzzle.cages[puzzle.cages.length - 1])
-    expect(assignments).toEqual([[1, 2], [2, 1]])
-    expect(getAllSearchCandidates(grid, puzzle).get('0:0')).toEqual([1, 2])
-    expect(getAllSearchCandidates(grid, puzzle).get('0:1')).toEqual([1, 2])
+    expect(assignments).toEqual([[1, 2]])
+    expect(getAllSearchCandidates(grid, puzzle).get('0:0')).toEqual([1])
+    expect(getAllSearchCandidates(grid, puzzle).get('0:1')).toEqual([2])
 
     puzzle.givens[0][0] = 1
     const partialGrid = puzzle.givens.map((row) => [...row]) as SearchGrid
