@@ -274,12 +274,14 @@ describe('analyzeLocalFeasibility', () => {
       combinations: [[3, 8], [5, 6], [6, 5], [7, 4], [8, 3]],
     })
     // For (0,2), the given 4 in (1,0) is in the same region, so 4 is
-    // excluded; the cage then leaves [3,5,6,7,8]. Cell (0,3) has no
-    // additional given in its region, so its cage candidates are [3..8].
+    // excluded; its positional cage candidates are [3,5,6,7,8]. Cell (0,3)
+    // has no additional given in its region and Sudoku permits 7, but 7 only
+    // occurs at the first position in the valid assignments. Its positional
+    // candidates must therefore be [3,4,5,6,8], not the cage-wide union.
     expect(first.candidates.find(({ cell }) => cell.row === 0 && cell.col === 2)?.candidates)
       .toEqual([3, 5, 6, 7, 8])
     expect(first.candidates.find(({ cell }) => cell.row === 0 && cell.col === 3)?.candidates)
-      .toEqual([3, 4, 5, 6, 7, 8])
+      .toEqual([3, 4, 5, 6, 8])
   })
 
   it('reports local feasibility without claiming global solvability', () => {

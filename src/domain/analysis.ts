@@ -231,8 +231,10 @@ export function analyzeLocalFeasibility(
       }
     }
 
-    const candidateDigits = new Set(combinations.flat())
-    for (const cell of remainingCells) cageCandidates.set(coordinateKey(cell), candidateDigits)
+    for (let index = 0; index < remainingCells.length; index += 1) {
+      const candidateDigits = new Set(combinations.map((assignment) => assignment[index]))
+      cageCandidates.set(coordinateKey(remainingCells[index]), candidateDigits)
+    }
     cages.push({
       cageId: cage.id,
       remainingCells,
