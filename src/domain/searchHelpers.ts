@@ -69,6 +69,23 @@ export function getAllSearchCandidates(grid: SearchGrid, puzzle: PuzzleDefinitio
 
 export function isCompleteGrid(grid: SearchGrid): boolean { return grid.every((row) => row.every((value) => value !== null)) }
 
+export function isConsistentSearchGrid(grid: SearchGrid): boolean {
+  for (let index = 0; index < 9; index += 1) {
+    const row = grid[index].filter((value): value is number => value !== null)
+    const column = grid.map((line) => line[index]).filter((value): value is number => value !== null)
+    if (new Set(row).size !== row.length || new Set(column).size !== column.length) return false
+  }
+  for (let br = 0; br < 3; br += 1) for (let bc = 0; bc < 3; bc += 1) {
+    const box: number[] = []
+    for (let row = br * 3; row < br * 3 + 3; row += 1) for (let col = bc * 3; col < bc * 3 + 3; col += 1) {
+      const value = grid[row][col]
+      if (value !== null) box.push(value)
+    }
+    if (new Set(box).size !== box.length) return false
+  }
+  return true
+}
+
 export function isValidCompletedGrid(grid: SearchGrid, puzzle: PuzzleDefinition): boolean {
   if (!isCompleteGrid(grid)) return false
   for (let row = 0; row < 9; row += 1) {

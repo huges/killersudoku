@@ -1,6 +1,6 @@
 import { type PuzzleDefinition } from './types'
 import { ValidationError, validatePuzzle } from './validation'
-import { type SearchGrid, getAllSearchCandidates, getCageCombinations, applyAssignment, isCompleteGrid, isValidCompletedGrid } from './searchHelpers'
+import { type SearchGrid, getAllSearchCandidates, getCageCombinations, applyAssignment, isCompleteGrid, isConsistentSearchGrid, isValidCompletedGrid } from './searchHelpers'
 
 export type SolverOptions = { maxNodes?: number }
 export type SolverStatus = 'invalid' | 'unsatisfiable' | 'unique' | 'multiple' | 'incomplete'
@@ -56,6 +56,7 @@ function search(puzzle: PuzzleDefinition, maxNodes: number): SolverResult {
         }
       }
     }
+    if (!isConsistentSearchGrid(grid)) return
     let candidates = getAllSearchCandidates(grid, puzzle)
     let propagated = true
     while (propagated && !isCompleteGrid(grid)) {
