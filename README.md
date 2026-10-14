@@ -64,4 +64,8 @@ M0-2 è completato; i controlli automatici e la CI restano parte del contratto d
 
 M0-3 aggiunge il modello puro versionato del puzzle e dello stato di partita in `src/domain/`, incluse validazione di puzzle, gabbie, cronologia e documento JSON, serializzazione, operazioni immutabili di partita e fixture deterministiche. La UI resta intenzionalmente non giocabile.
 
+## M1-4 — Solver deterministico
+
+Il dominio espone `solve` e `analyze` da `src/domain/solver.ts`. Entrambe validano la `PuzzleDefinition` prima della ricerca e classificano deterministicamente il puzzle come `invalid`, `unsatisfiable`, `unique`, `multiple` o `incomplete`, contando al massimo due soluzioni. `maxNodes` conta i nodi DFS effettivamente entrati (radice inclusa); il default è 100000 e un limite raggiunto produce `incomplete` solo se resta una classificazione da dimostrare. Gli errori di opzioni e gli errori inattesi propagano; soltanto una `ValidationError` della fixture produce `invalid`.
+
 Il confine `PersistenceContract` in `src/domain/persistence.ts` espone esclusivamente caricamento e sostituzione atomica del documento serializzato; non introduce filesystem, database, `localStorage` o altro storage concreto. I test usano un test double per verificare che caricamenti invalidi e scritture fallite non sostituiscano il documento precedente. Il modello completo e le invarianti sono documentati in `docs/M0-3-modello.md`.
