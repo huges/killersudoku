@@ -11,8 +11,15 @@ import {
 const difficulties = new Set(['easy', 'medium', 'hard', 'expert'])
 const statuses = new Set(['not_started', 'in_progress', 'paused', 'completed'])
 
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(`Invalid domain data: ${message}`)
+    this.name = 'ValidationError'
+  }
+}
+
 export function validationError(message: string): never {
-  throw new Error(`Invalid domain data: ${message}`)
+  throw new ValidationError(message)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -42,10 +49,19 @@ function sameSnapshot(left: CellSnapshot, right: CellSnapshot): boolean {
 }
 
 function validateMatrix<T>(matrix: unknown, name: string, validCell: (value: unknown) => boolean): asserts matrix is T[][] {
-  if (!Array.isArray(matrix) || matrix.length !== GRID_SIZE
-    || matrix.some((row) => !Array.isArray(row) || row.length !== GRID_SIZE
-      || row.some((value) => !validCell(value)))) {
+  if (!Array.isArray(matrix) || matrix.length !== GRID_SIZE) {
     validationError(`${name} must be a ${GRID_SIZE}x${GRID_SIZE} matrix`)
+  }
+  for (let rowIndex = 0; rowIndex < GRID_SIZE; rowIndex += 1) {
+    const row = matrix[rowIndex]
+    if (!Array.isArray(row) || row.length !== GRID_SIZE) {
+      validationError(`${name} must be a ${GRID_SIZE}x${GRID_SIZE} matrix`)
+    }
+    for (let colIndex = 0; colIndex < GRID_SIZE; colIndex += 1) {
+      if (!Object.prototype.hasOwnProperty.call(row, colIndex) || !validCell(row[colIndex])) {
+        validationError(`${name} must be a ${GRID_SIZE}x${GRID_SIZE} matrix`)
+      }
+    }
   }
 }
 
