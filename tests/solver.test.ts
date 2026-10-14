@@ -20,12 +20,11 @@ function multiplePuzzle() {
   const puzzle = clone(solvedPuzzle)
   puzzle.givens = puzzle.givens.map((row, rowIndex) => rowIndex < 2 ? Array(9).fill(null) : [...row])
   const fixed = puzzle.cages.filter((cage) => cage.cells[0].row >= 2)
-  const pairs = Array.from({ length: 9 }, (_, col) => ({
-    id: `pair-${col}`,
-    cells: [{ row: 0, col }, { row: 1, col }],
-    sum: solvedPuzzle.givens[0][col]! + solvedPuzzle.givens[1][col]!,
-  }))
-  puzzle.cages = [...pairs, ...fixed]
+  puzzle.cages = [
+    { id: 'row-0', cells: Array.from({ length: 9 }, (_, col) => ({ row: 0, col })), sum: 45 },
+    { id: 'row-1', cells: Array.from({ length: 9 }, (_, col) => ({ row: 1, col })), sum: 45 },
+    ...fixed,
+  ]
   return puzzle
 }
 
@@ -84,7 +83,9 @@ describe('deterministic solver', () => {
     expect(result.status).toBe('multiple')
     expect(result.count).toBe(2)
     expect(result.complete).toBe(true)
-    expect(result.solution).toBeDefined()
+    // DFS enters the root, then the two row-swap branches; the first solution is the fixture grid.
+    expect(result.nodes).toBe(3)
+    expect(result.solution).toEqual(first)
   })
 
   it('preserves local feasibility behavior through the shared helpers', () => {
@@ -121,8 +122,12 @@ describe('deterministic solver', () => {
     const puzzle = clone(partialPuzzle)
     puzzle.givens[0][0] = null
     puzzle.givens[0][1] = null
+    puzzle.givens[3][0] = 2
+    puzzle.givens[3][1] = 1
+    puzzle.cages.find((cage) => cage.id === 'cage-3-0')!.sum = 2
+    puzzle.cages.find((cage) => cage.id === 'cage-3-1')!.sum = 1
     puzzle.cages = puzzle.cages.filter((cage) => cage.id !== 'cage-0-0' && cage.id !== 'cage-0-1')
-    puzzle.cages.push({ id: 'pair', cells: [{ row: 0, col: 1 }, { row: 0, col: 0 }], sum: 3 })
+    puzzle.cages.push({ id: 'pair', cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }], sum: 3 })
     validatePuzzle(puzzle)
     const grid = puzzle.givens.map((row) => [...row]) as SearchGrid
     const assignments = getCageCombinations(grid, puzzle.cages[puzzle.cages.length - 1])
@@ -131,13 +136,12 @@ describe('deterministic solver', () => {
     expect(analyzedInitial.status).toBe('feasible')
     if (analyzedInitial.status !== 'invalid_input') {
       const pair = analyzedInitial.cages.find((cage) => cage.cageId === 'pair')!
-      expect(pair.remainingCells).toEqual([{ row: 0, col: 1 }, { row: 0, col: 0 }])
-      expect(pair.combinations).toEqual([[2, 1]])
+      expect(pair.remainingCells).toEqual([{ row: 0, col: 0 }, { row: 0, col: 1 }])
+      expect(pair.combinations).toEqual([[1, 2]])
     }
     expect(getAllSearchCandidates(grid, puzzle).get('0:0')).toEqual([1])
     expect(getAllSearchCandidates(grid, puzzle).get('0:1')).toEqual([2])
 
-    puzzle.cages[puzzle.cages.length - 1].cells.reverse()
     const analyzed = analyzeLocalFeasibility(puzzle, newGame(puzzle))
     expect(analyzed.status).toBe('feasible')
     if (analyzed.status !== 'invalid_input') {

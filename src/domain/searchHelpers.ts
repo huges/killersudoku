@@ -45,7 +45,12 @@ export function getCageCombinations(grid: SearchGrid, cage: Cage): number[][] {
     for (const digit of available) if (candidates.includes(digit)) visit(index + 1, left - digit, available.filter((v) => v !== digit), [...selected, digit])
   }
   visit(0, sum, DIGITS.filter((d) => !present.includes(d)), [])
-  return result.sort((a, b) => a.some((v, i) => v !== b[i]) ? a.findIndex((v, i) => v !== b[i]) : 0).sort((a, b) => { for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i] - b[i]; return 0 })
+  return result.sort((a, b) => {
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return a[i] - b[i]
+    }
+    return 0
+  })
 }
 
 export function applyAssignment(grid: SearchGrid, cells: CellCoordinate[], assignment: number[]): SearchGrid {
