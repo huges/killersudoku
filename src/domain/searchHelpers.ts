@@ -56,10 +56,10 @@ export function getAllSearchCandidates(grid: SearchGrid, puzzle: PuzzleDefinitio
   const result = new Map<string, number[]>();
   for (const cage of puzzle.cages) {
     const ordered = [...cage.cells].sort(compareCells)
+    const remaining = ordered.filter((cell) => grid[cell.row][cell.col] === null)
     const combinations = getCageCombinations(grid, cage)
-    for (const cell of ordered) {
-      if (grid[cell.row][cell.col] !== null) continue
-      const index = ordered.findIndex((candidate) => key(candidate) === key(cell))
+    for (const cell of remaining) {
+      const index = remaining.findIndex((candidate) => key(candidate) === key(cell))
       const values = new Set(combinations.map((assignment) => assignment[index]))
       result.set(key(cell), [...values].sort((a, b) => a - b))
     }

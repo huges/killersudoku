@@ -76,8 +76,7 @@ describe('deterministic solver', () => {
     const multiple = multiplePuzzle()
     validatePuzzle(multiple)
     const first = solvedPuzzle.givens.map((row) => [...row])
-    const second = first.map((row) => [...row])
-    ;[second[0][0], second[1][0]] = [second[1][0], second[0][0]]
+    const second = [first[1], first[0], ...first.slice(2)].map((row) => [...row])
     assertCompleteSolution(multiple, first)
     assertCompleteSolution(multiple, second)
     expect(second).not.toEqual(first)
@@ -123,18 +122,43 @@ describe('deterministic solver', () => {
     puzzle.givens[0][0] = null
     puzzle.givens[0][1] = null
     puzzle.cages = puzzle.cages.filter((cage) => cage.id !== 'cage-0-0' && cage.id !== 'cage-0-1')
-    puzzle.cages.push({ id: 'pair', cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }], sum: 3 })
+    puzzle.cages.push({ id: 'pair', cells: [{ row: 0, col: 1 }, { row: 0, col: 0 }], sum: 3 })
     validatePuzzle(puzzle)
     const grid = puzzle.givens.map((row) => [...row]) as SearchGrid
     const assignments = getCageCombinations(grid, puzzle.cages[puzzle.cages.length - 1])
     expect(assignments).toEqual([[1, 2]])
+    const analyzedInitial = analyzeLocalFeasibility(puzzle, newGame(puzzle))
+    expect(analyzedInitial.status).toBe('feasible')
+    if (analyzedInitial.status !== 'invalid_input') {
+      const pair = analyzedInitial.cages.find((cage) => cage.cageId === 'pair')!
+      expect(pair.remainingCells).toEqual([{ row: 0, col: 1 }, { row: 0, col: 0 }])
+      expect(pair.combinations).toEqual([[2, 1]])
+    }
     expect(getAllSearchCandidates(grid, puzzle).get('0:0')).toEqual([1])
     expect(getAllSearchCandidates(grid, puzzle).get('0:1')).toEqual([2])
+
+    puzzle.cages[puzzle.cages.length - 1].cells.reverse()
+    const analyzed = analyzeLocalFeasibility(puzzle, newGame(puzzle))
+    expect(analyzed.status).toBe('feasible')
+    if (analyzed.status !== 'invalid_input') {
+      const pair = analyzed.cages.find((cage) => cage.cageId === 'pair')!
+      expect(pair.remainingCells).toEqual([{ row: 0, col: 0 }, { row: 0, col: 1 }])
+      expect(pair.combinations).toEqual([[1, 2]])
+      expect(analyzed.candidates[0]).toEqual({ cell: { row: 0, col: 0 }, candidates: [1] })
+      expect(analyzed.candidates[1]).toEqual({ cell: { row: 0, col: 1 }, candidates: [2] })
+    }
 
     puzzle.givens[0][0] = 1
     const partialGrid = puzzle.givens.map((row) => [...row]) as SearchGrid
     expect(getCageCombinations(partialGrid, puzzle.cages[puzzle.cages.length - 1])).toEqual([[2]])
     expect(getAllSearchCandidates(partialGrid, puzzle).get('0:1')).toEqual([2])
+    const analyzedPartial = analyzeLocalFeasibility(puzzle, newGame(puzzle))
+    expect(analyzedPartial.status).toBe('feasible')
+    if (analyzedPartial.status !== 'invalid_input') {
+      const pair = analyzedPartial.cages.find((cage) => cage.cageId === 'pair')!
+      expect(pair.remainingCells).toEqual([{ row: 0, col: 1 }])
+      expect(pair.combinations).toEqual([[2]])
+    }
   })
 
   it('classifies deterministically and preserves an exact terminal node limit', () => {

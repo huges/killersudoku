@@ -44,15 +44,12 @@ function search(puzzle: PuzzleDefinition, maxNodes: number): SolverResult {
       changed = false
       for (const cage of puzzle.cages) {
         const cells = [...cage.cells].sort((a, b) => a.row - b.row || a.col - b.col)
-        const remainingCells = cells.filter((cell) => grid[cell.row][cell.col] === null)
+        const remaining = cells.filter((cell) => grid[cell.row][cell.col] === null)
         const combinations = getCageCombinations(grid, cage)
-        if (combinations.length === 0 && remainingCells.length > 0) return
-        if (combinations.length === 1 && remainingCells.length > 0) {
-          const next = applyAssignment(grid, remainingCells, combinations[0])
-          if (next.some((row, r) => row.some((value, c) => value !== grid[r][c]))) {
-            grid = next
-            changed = true
-          }
+        if (combinations.length === 0 && remaining.length > 0) return
+        if (combinations.length === 1 && remaining.length > 0) {
+          const next = applyAssignment(grid, remaining, combinations[0])
+          if (next.some((row, r) => row.some((value, c) => value !== grid[r][c]))) { grid = next; changed = true }
         }
       }
     }
@@ -73,12 +70,9 @@ function search(puzzle: PuzzleDefinition, maxNodes: number): SolverResult {
           break
         }
       }
-      if (propagated) {
-        if (!isConsistentSearchGrid(grid)) return
-        candidates = getAllSearchCandidates(grid, puzzle)
-        if ([...candidates.values()].some((values) => values.length === 0)) return
-      }
+      if (propagated) candidates = getAllSearchCandidates(grid, puzzle)
     }
+    if ([...candidates.values()].some((values) => values.length === 0)) return
     if (isCompleteGrid(grid)) {
       if (isValidCompletedGrid(grid, puzzle) && !solutions.some((solution) => JSON.stringify(solution) === JSON.stringify(grid))) solutions.push(cloneGrid(grid))
       return

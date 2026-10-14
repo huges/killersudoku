@@ -63,6 +63,17 @@ function canonicalCells(cells: CellCoordinate[]): CellCoordinate[] {
   return cloneCells(cells).sort(compareCells)
 }
 
+function remapAssignments(
+  assignments: number[][],
+  canonical: CellCoordinate[],
+  historical: CellCoordinate[],
+): number[][] {
+  return assignments.map((assignment) => historical.map((cell) => {
+    const index = canonical.findIndex((candidate) => coordinateKey(candidate) === coordinateKey(cell))
+    return assignment[index]
+  }))
+}
+
 function sameViolation(left: AnalysisViolation, right: AnalysisViolation): boolean {
   return left.type === right.type
     && left.cause === right.cause
@@ -129,10 +140,11 @@ export function analyzeLocalFeasibility(
   const cageCandidates = new Map<string, Set<number>>()
   for (const cage of puzzle.cages) {
     const cells = canonicalCells(cage.cells)
+    const remainingCells = cloneCells(cage.cells).filter((cell) => game.values[cell.row][cell.col] === null)
+    const canonicalRemainingCells = cells.filter((cell) => game.values[cell.row][cell.col] === null)
     const present = cells
       .map((cell) => game.values[cell.row][cell.col])
       .filter((value): value is number => value !== null)
-    const remainingCells = cells.filter((cell) => game.values[cell.row][cell.col] === null)
     const remainingSum = cage.sum - present.reduce((total, value) => total + value, 0)
     const duplicate = verification.violations.some((violation) =>
       violation.type === 'cage_duplicate' && violation.cageId === cage.id,
@@ -155,7 +167,8 @@ export function analyzeLocalFeasibility(
         })
       }
     } else {
-      combinations = getCageCombinations(game.values as SearchGrid, cage)
+      const canonicalCombinations = getCageCombinations(game.values as SearchGrid, cage)
+      combinations = remapAssignments(canonicalCombinations, canonicalRemainingCells, remainingCells)
       if (combinations.length === 0) {
         const available = DIGITS.filter((digit) => !present.includes(digit))
         const arithmeticExists = hasArithmeticCombination(remainingCells.length, remainingSum, available)
