@@ -56,15 +56,29 @@ function search(puzzle: PuzzleDefinition, maxNodes: number): SolverResult {
         }
       }
     }
-    const candidates = getAllSearchCandidates(grid, puzzle)
+    let candidates = getAllSearchCandidates(grid, puzzle)
+    let propagated = true
+    while (propagated && !isCompleteGrid(grid)) {
+      propagated = false
+      for (const [cellKey, values] of candidates) {
+        const [row, col] = cellKey.split(':').map(Number)
+        if (grid[row][col] === null && values.length === 0) return
+        if (grid[row][col] === null && values.length === 1) {
+          grid = grid.map((line) => [...line])
+          grid[row][col] = values[0]
+          propagated = true
+        }
+      }
+      if (propagated) candidates = getAllSearchCandidates(grid, puzzle)
+    }
     if (isCompleteGrid(grid)) {
       if (isValidCompletedGrid(grid, puzzle) && !solutions.some((solution) => JSON.stringify(solution) === JSON.stringify(grid))) solutions.push(cloneGrid(grid))
       return
     }
     const available = [...candidates.entries()]
-      .filter(([key]) => grid[Number(key.split(':')[0])][Number(key.split(':')[1])] === null)
-      .sort(([a], [b]) => { const [ar, ac] = a.split(':').map(Number); const [br, bc] = b.split(':').map(Number); return (candidates.get(a)?.length ?? 0) - (candidates.get(b)?.length ?? 0) || ar - br || ac - bc })
-    const choice = available.find(([, values]) => values.length > 0)
+      .filter(([cellKey]) => { const [row, col] = cellKey.split(':').map(Number); return grid[row][col] === null })
+      .sort(([a, av], [b, bv]) => { const [ar, ac] = a.split(':').map(Number); const [br, bc] = b.split(':').map(Number); return av.length - bv.length || ar - br || ac - bc })
+    const choice = available[0]
     if (!choice || choice[1].length === 0) return
     const [keyName, values] = choice; const [row, col] = keyName.split(':').map(Number)
     for (const value of values) {

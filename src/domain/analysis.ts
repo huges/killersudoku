@@ -88,17 +88,6 @@ function sudokuCandidates(game: GameState, cell: CellCoordinate): number[] {
   return getSudokuCandidates(game.values as SearchGrid, cell)
 }
 
-function hasArithmeticCombination(count: number, sum: number, available: number[]): boolean {
-  const visit = (start: number, left: number, remaining: number): boolean => {
-    if (remaining === 0) return left === 0
-    for (let index = start; index <= available.length - remaining; index += 1) {
-      if (visit(index + 1, left - available[index], remaining - 1)) return true
-    }
-    return false
-  }
-  return visit(0, sum, count)
-}
-
 function verificationViolations(
   puzzle: PuzzleDefinition,
   violations: ReturnType<typeof verifyGame>['violations'],
