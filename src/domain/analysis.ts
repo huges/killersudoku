@@ -6,6 +6,7 @@ import {
 } from './types'
 import { validateGameState, validatePuzzle, ValidationError } from './validation'
 import { verifyGame } from './verification'
+import { getCageCombinations, getSudokuCandidates, hasArithmeticCombination, type SearchGrid } from './searchHelpers'
 
 const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -62,6 +63,17 @@ function canonicalCells(cells: CellCoordinate[]): CellCoordinate[] {
   return cloneCells(cells).sort(compareCells)
 }
 
+function remapAssignments(
+  assignments: number[][],
+  canonical: CellCoordinate[],
+  historical: CellCoordinate[],
+): number[][] {
+  return assignments.map((assignment) => historical.map((cell) => {
+    const index = canonical.findIndex((candidate) => coordinateKey(candidate) === coordinateKey(cell))
+    return assignment[index]
+  }))
+}
+
 function sameViolation(left: AnalysisViolation, right: AnalysisViolation): boolean {
   return left.type === right.type
     && left.cause === right.cause
@@ -84,70 +96,7 @@ function appendUniqueViolation(
 }
 
 function sudokuCandidates(game: GameState, cell: CellCoordinate): number[] {
-  const value = game.values[cell.row][cell.col]
-  if (value !== null) return [value]
-
-  const excluded = new Set<number>()
-  for (let index = 0; index < 9; index += 1) {
-    const rowValue = game.values[cell.row][index]
-    const columnValue = game.values[index][cell.col]
-    if (rowValue !== null) excluded.add(rowValue)
-    if (columnValue !== null) excluded.add(columnValue)
-  }
-  const rowStart = Math.floor(cell.row / 3) * 3
-  const colStart = Math.floor(cell.col / 3) * 3
-  for (let row = rowStart; row < rowStart + 3; row += 1) {
-    for (let col = colStart; col < colStart + 3; col += 1) {
-      const regionValue = game.values[row][col]
-      if (regionValue !== null) excluded.add(regionValue)
-    }
-  }
-  return DIGITS.filter((digit) => !excluded.has(digit))
-}
-
-function arithmeticCombinations(count: number, sum: number, available: number[]): number[][] {
-  const combinations: number[][] = []
-  const visit = (start: number, remaining: number, left: number, selected: number[]): void => {
-    if (remaining === 0) {
-      if (left === 0) combinations.push([...selected])
-      return
-    }
-    for (let index = start; index <= available.length - remaining; index += 1) {
-      visit(index + 1, remaining - 1, left - available[index], [...selected, available[index]])
-    }
-  }
-  visit(0, count, sum, [])
-  return combinations
-}
-
-function orderedCompatibleAssignments(
-  arithmetic: number[][],
-  remainingCells: CellCoordinate[],
-  sudokuByCell: Map<string, number[]>,
-): number[][] {
-  const assignments: number[][] = []
-  for (const digits of arithmetic) {
-    const visit = (index: number, available: number[], selected: number[]): void => {
-      if (index === remainingCells.length) {
-        assignments.push([...selected])
-        return
-      }
-      const candidates = sudokuByCell.get(coordinateKey(remainingCells[index])) ?? []
-      for (const digit of available) {
-        if (candidates.includes(digit)) {
-          visit(index + 1, available.filter((candidate) => candidate !== digit), [...selected, digit])
-        }
-      }
-    }
-    visit(0, digits, [])
-  }
-  return assignments.sort((left, right) => {
-    for (let index = 0; index < left.length; index += 1) {
-      const difference = left[index] - right[index]
-      if (difference !== 0) return difference
-    }
-    return 0
-  })
+  return getSudokuCandidates(game.values as SearchGrid, cell)
 }
 
 function verificationViolations(
@@ -191,10 +140,11 @@ export function analyzeLocalFeasibility(
   const cageCandidates = new Map<string, Set<number>>()
   for (const cage of puzzle.cages) {
     const cells = canonicalCells(cage.cells)
+    const remainingCells = cloneCells(cage.cells).filter((cell) => game.values[cell.row][cell.col] === null)
+    const canonicalRemainingCells = cells.filter((cell) => game.values[cell.row][cell.col] === null)
     const present = cells
       .map((cell) => game.values[cell.row][cell.col])
       .filter((value): value is number => value !== null)
-    const remainingCells = cells.filter((cell) => game.values[cell.row][cell.col] === null)
     const remainingSum = cage.sum - present.reduce((total, value) => total + value, 0)
     const duplicate = verification.violations.some((violation) =>
       violation.type === 'cage_duplicate' && violation.cageId === cage.id,
@@ -217,17 +167,13 @@ export function analyzeLocalFeasibility(
         })
       }
     } else {
-      const available = DIGITS.filter((digit) => !present.includes(digit))
-      const arithmetic = arithmeticCombinations(remainingCells.length, remainingSum, available)
-      if (arithmetic.length === 0) {
-        cause = 'residual_sum_impossible'
+      const canonicalCombinations = getCageCombinations(game.values as SearchGrid, cage)
+      combinations = remapAssignments(canonicalCombinations, canonicalRemainingCells, remainingCells)
+      if (combinations.length === 0) {
+        const available = DIGITS.filter((digit) => !present.includes(digit))
+        const arithmeticExists = hasArithmeticCombination(remainingCells.length, remainingSum, available)
+        cause = arithmeticExists ? 'candidate_conflict' : 'residual_sum_impossible'
         appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
-      } else {
-        combinations = orderedCompatibleAssignments(arithmetic, remainingCells, sudokuByCell)
-        if (combinations.length === 0) {
-          cause = 'candidate_conflict'
-          appendUniqueViolation(violations, { type: 'cage_sum_unreachable', cause, cells: cloneCells(remainingCells), cageId: cage.id, expectedSum: cage.sum, actualSum: cage.sum - remainingSum })
-        }
       }
     }
 

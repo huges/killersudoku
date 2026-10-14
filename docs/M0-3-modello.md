@@ -70,3 +70,35 @@ L'omissione della griglia iniziale produce una copia dei givens con le altre cel
 Il risultato può essere `invalid_input`, `feasible` o `infeasible`. `infeasible` descrive soltanto la griglia corrente rispetto ai vincoli locali verificati: non dimostra che il puzzle originale sia insolubile. Analogamente, `feasible` non dimostra la solvibilità globale. Le cause locali distinguono una somma residua irraggiungibile con cifre distinte (`residual_sum_impossible`) dall’assenza di assegnazioni compatibili con i candidati Sudoku (`candidate_conflict`). Una gabbia completa valida restituisce `combinations = [[]]`; una gabbia non fattibile restituisce combinazioni e candidati vuoti.
 
 L’analisi deve essere richiesta esplicitamente da interfaccia, test o strumenti diagnostici: l’inserimento, la cancellazione, undo/redo e la persistenza continuano a usare le operazioni esistenti senza avviare solver o correggere automaticamente la griglia.
+
+
+## M1-4 — Ricerca deterministica e limite dei nodi
+
+`solve` e `analyze` in `src/domain/solver.ts` condividono la stessa ricerca pura.
+Le opzioni sono validate prima della fixture: `maxNodes` omesso vale 100000;
+una proprietà presente deve contenere un intero positivo safe. Una fixture
+rifiutata da `validatePuzzle` produce `invalid` con zero nodi. Gli altri errori
+propagano senza essere convertiti in una classificazione del puzzle.
+
+La DFS conta la radice e ogni configurazione entrata prima della propagazione.
+La propagazione delle gabbie e delle celle obbligate avviene nello stesso nodo.
+Il ramo è scelto per minimo numero di candidati, poi riga e colonna; le cifre
+sono visitate in ordine crescente. La seconda soluzione interrompe la ricerca.
+Un risultato `unique` richiede che tutti i rami siano esauriti. Il limite produce
+`incomplete` soltanto se impedisce di entrare in un ramo ancora da verificare;
+non basta raggiungere numericamente `maxNodes`.
+
+Le combinazioni di gabbia riguardano esclusivamente le celle residue canoniche;
+i candidati di ogni cella sono l’unione dei valori nella sua posizione nelle
+assegnazioni. Una gabbia completa valida produce `[[]]`. Gli helper condivisi
+non modificano fixture o griglie esterne, e non costruiscono stati di partita.
+
+La fixture ramificata di `tests/solver.test.ts` conserva le ultime sette righe
+della soluzione di riferimento e lascia vuote le prime due, ciascuna in una
+gabbia di somma 45. Restano tre cicli indipendenti di cifre: (1,4,7), (2,5,8)
+e (3,6,9). La DFS entra nella radice, poi sceglie (0,0), (0,1) e (0,2): il nodo
+4 trova la prima soluzione, il nodo 5 la seconda. I test verificano `incomplete`
+senza soluzioni ai limiti 1 e 3, `incomplete` con una soluzione al limite 4 e
+`multiple` conclusivo esattamente al limite 5. Il caso già risolto è conclusivo
+al nodo 1. Due griglie esplicite valide dimostrano la molteplicità della fixture
+indipendentemente dalla classificazione del solver.
