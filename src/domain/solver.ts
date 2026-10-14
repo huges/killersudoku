@@ -65,12 +65,19 @@ function search(puzzle: PuzzleDefinition, maxNodes: number): SolverResult {
         const [row, col] = cellKey.split(':').map(Number)
         if (grid[row][col] === null && values.length === 0) return
         if (grid[row][col] === null && values.length === 1) {
-          grid = grid.map((line) => [...line])
-          grid[row][col] = values[0]
+          const next = grid.map((line) => [...line])
+          next[row][col] = values[0]
+          if (!isConsistentSearchGrid(next)) return
+          grid = next
           propagated = true
+          break
         }
       }
-      if (propagated) candidates = getAllSearchCandidates(grid, puzzle)
+      if (propagated) {
+        if (!isConsistentSearchGrid(grid)) return
+        candidates = getAllSearchCandidates(grid, puzzle)
+        if ([...candidates.values()].some((values) => values.length === 0)) return
+      }
     }
     if (isCompleteGrid(grid)) {
       if (isValidCompletedGrid(grid, puzzle) && !solutions.some((solution) => JSON.stringify(solution) === JSON.stringify(grid))) solutions.push(cloneGrid(grid))
