@@ -8,14 +8,14 @@
   },
   "scripts": {
     "dev": "vite --config vite.config.ts",
-    "lint": "eslint src tests scripts vite.config.ts vitest.config.ts eslint.config.js --config eslint.config.js",
+    "lint": "eslint src tests scripts/*.ts vite.config.ts vitest.config.ts eslint.config.js --config eslint.config.js",
     "typecheck": "tsc --project tsconfig.app.json --noEmit && tsc --project tsconfig.node.json --noEmit",
-    "test": "vitest run --config vitest.config.ts",
-    "verify:catalog": "tsx scripts/verify-catalog.ts",
-    "catalog:generate-fixtures": "tsx scripts/generate-catalog-fixtures.ts",
-    "catalog:update-reference": "tsx scripts/update-catalog-reference.ts",
-    "catalog:register-identities": "tsx scripts/register-catalog-identities.ts",
-    "build": "npm run typecheck && vite build --config vite.config.ts"
+    "test": "vitest run --config vitest.config.ts && npm run verify:catalog",
+    "verify:catalog": "node --import tsx scripts/verify-catalog.ts",
+    "catalog:generate-fixtures": "node --import tsx scripts/generate-catalog-fixtures.ts",
+    "catalog:update-reference": "node --import tsx scripts/update-catalog-reference.ts",
+    "catalog:register-identities": "node --import tsx scripts/register-catalog-identities.ts",
+    "build": "npm run verify:catalog && npm run typecheck && vite build --config vite.config.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "5.0.4",

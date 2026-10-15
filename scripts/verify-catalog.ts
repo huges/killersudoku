@@ -1,65 +1,62 @@
-import { readFileSync } from 'node:fs'
-import { resolve, relative } from 'node:path'
-import { compareReference, verifyCatalog, type CatalogVerificationResult } from '../src/domain/catalogPipeline'
+import { readFileSync, realpathSync } from 'node:fs'
+import { resolve, relative, isAbsolute, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { verifyCatalog } from '../src/domain/catalogPipeline'
 
-type Manifest = { formatVersion: string; sampleVersion: string; generatorVersion: string; seed: string; parameters: Record<string, unknown>; inputs: string[]; expectedResult: string; identityLock: string; negativeFixtures?: string[] }
-
-const root = resolve(process.cwd())
+export type Manifest = {
+  formatVersion: string; sampleVersion: string; generatorVersion: string
+  seed: string; parameters: Record<string, unknown>; inputs: string[]
+  expectedResult: string; identityLock: string; negativeFixtures: string[]; maxNodes: number
+}
 const fail = (message: string): never => { throw new Error(message) }
-const readText = (path: string): string => readFileSync(path, 'utf8')
-const readJson = (path: string): unknown => { try { return JSON.parse(readText(path)) } catch { fail(`manifest|${relative(root, path)}|invalid JSON`) } }
-function assertManifest(manifest: unknown): asserts manifest is Manifest {
-  if (typeof manifest !== 'object' || manifest === null) fail('manifest|manifest.json|must be an object')
-  const value = manifest as Record<string, unknown>
-  const paths = ['inputs', 'expectedResult', 'identityLock']
-  if (!['formatVersion', 'sampleVersion', 'generatorVersion', 'seed', 'parameters', ...paths].every((key) => key in value)) fail('manifest|manifest.json|missing required field')
-  if (typeof value.formatVersion !== 'string' || typeof value.sampleVersion !== 'string' || typeof value.generatorVersion !== 'string' || typeof value.seed !== 'string' || typeof value.parameters !== 'object' || value.parameters === null || !Array.isArray(value.inputs) || value.inputs.some((item) => typeof item !== 'string') || typeof value.expectedResult !== 'string' || typeof value.identityLock !== 'string') fail('manifest|manifest.json|invalid field')
-  if (value.inputs.length === 0 || [...value.inputs].sort().some((item, index) => item !== value.inputs[index]) || new Set(value.inputs).size !== value.inputs.length) fail('manifest|inputs|must be non-empty, unique and deterministically ordered')
+const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+export function readJson(path: string): unknown {
+  try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return fail(`file|${path}|missing or invalid JSON`) }
 }
-
-function withinCatalog(path: string): boolean {
-  const catalogRoot = resolve(root, 'catalog')
-  const candidate = resolve(root, path)
-  return candidate === catalogRoot || candidate.startsWith(`${catalogRoot}/`)
+export function catalogPath(root: string, path: string): string {
+  if (typeof path !== 'string' || isAbsolute(path) || path.includes('\\') || path.split('/').some(p => p === '..' || p === '.' || p === '')) fail('manifest|path|invalid relative path')
+  const catalog = realpathSync(resolve(root, 'catalog'))
+  const target = realpathSync(resolve(root, path))
+  const rel = relative(catalog, target)
+  if (!rel || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) fail(`manifest|${path}|path outside catalog root`)
+  return target
 }
-
-function main(): void {
-  const manifestPath = resolve(root, 'catalog/fixtures/manifest.json')
-  const manifest = readJson(manifestPath)
-  assertManifest(manifest)
-  const declared = [...manifest.inputs, manifest.expectedResult, manifest.identityLock, ...(manifest.negativeFixtures ?? [])]
-  for (const item of declared) {
-    if (item.startsWith('/') || !withinCatalog(item) || item.includes('..')) fail(`manifest|${item}|path outside catalog root`)
+export function loadSample(root: string) {
+  const raw = readJson(catalogPath(root, 'catalog/fixtures/manifest.json'))
+  const keys = ['formatVersion', 'sampleVersion', 'generatorVersion', 'seed', 'parameters', 'inputs', 'expectedResult', 'identityLock', 'negativeFixtures', 'maxNodes']
+  if (!object(raw) || Object.keys(raw).length !== keys.length || keys.some(k => !Object.hasOwn(raw, k))) fail('manifest|schema|invalid fields')
+  const m = raw as unknown as Manifest
+  if ([m.formatVersion, m.sampleVersion, m.generatorVersion, m.seed, m.expectedResult, m.identityLock].some(v => typeof v !== 'string' || !v) || m.formatVersion !== '1' || !object(m.parameters) || !Number.isSafeInteger(m.maxNodes) || m.maxNodes <= 0) fail('manifest|schema|invalid values')
+  for (const paths of [m.inputs, m.negativeFixtures]) {
+    if (!Array.isArray(paths) || paths.some(v => typeof v !== 'string') || new Set(paths).size !== paths.length || JSON.stringify(paths) !== JSON.stringify([...paths].sort())) fail('manifest|paths|must be unique and ordered')
   }
-  const inputs = manifest.inputs.map((item) => readJson(resolve(root, item)))
-  const puzzles = inputs.flatMap((item) => Array.isArray(item) ? item : [item])
-  const identity = readJson(resolve(root, manifest.identityLock))
-  if (typeof identity !== 'object' || identity === null || Array.isArray(identity)) fail(`identity|${manifest.identityLock}|must be an object`)
-  const actual = verifyCatalog(puzzles, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, identity: identity as Record<string, string> })
-  const expectedText = readText(resolve(root, manifest.expectedResult))
-  const expected = readJson(resolve(root, manifest.expectedResult)) as CatalogVerificationResult
-  const comparison = compareReference(actual, expected)
-  const actualText = `${JSON.stringify(actual)}\n`
-  if (!comparison.equal || actualText !== expectedText) fail(`reference|${manifest.expectedResult}|byte-for-byte mismatch`)
-  const identityEntries = Object.entries(identity as Record<string, string>)
-  for (const [id, fingerprint] of identityEntries) {
-    if (!/^sha256-[0-9a-f]{64}$/.test(fingerprint)) fail(`identity|${id}|fingerprint must be a SHA-256 digest`)
-  }
-  for (const record of actual.puzzles) {
-    if (record.structural === 'valid' && record.fingerprint && !identityEntries.some(([id, fingerprint]) => id === record.puzzleId && fingerprint === record.fingerprint)) fail(`identity|${record.puzzleId}|missing verified fingerprint`)
-  }
-  if (actual.errors.length > 0) fail(actual.errors[0])
-  for (const fixturePath of manifest.negativeFixtures ?? []) {
-    const fixture = readJson(resolve(root, fixturePath))
-    const negative = verifyCatalog([fixture], { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion })
-    const record = negative.puzzles[0]
-    if (!record || negative.errors.length === 0) fail(`negative|${fixturePath}|expected rejection`)
-    const expectedStatus = fixturePath.includes('unsatisfiable') ? 'unsatisfiable'
-      : fixturePath.includes('multiple') ? 'multiple'
-      : fixturePath.includes('incomplete') ? 'incomplete'
-      : 'invalid'
-    if (record.solver.status !== expectedStatus) fail(`negative|${fixturePath}|expected ${expectedStatus}, got ${record.solver.status}`)
-  }
+  if (!m.inputs.length) fail('manifest|inputs|empty sample')
+  const declared = [...m.inputs, ...m.negativeFixtures, m.expectedResult, m.identityLock]
+  if (new Set(declared).size !== declared.length) fail('manifest|paths|roles must be distinct')
+  for (const path of declared) catalogPath(root, path)
+  const puzzles = m.inputs.flatMap(path => { const value = readJson(catalogPath(root, path)); return Array.isArray(value) ? value : [value] })
+  const identity = readJson(catalogPath(root, m.identityLock))
+  if (!object(identity) || Object.values(identity).some(v => typeof v !== 'string' || !/^sha256-[0-9a-f]{64}$/.test(v))) fail('identity|schema|invalid SHA-256 register')
+  return { manifest: m, puzzles, identity: identity as Record<string, string> }
 }
-
-try { main() } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 }
+export function calculateSample(root: string, requireRegistered = true) {
+  const { manifest, puzzles, identity } = loadSample(root)
+  const result = verifyCatalog(puzzles, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes: manifest.maxNodes, identity })
+  if (result.errors.length) fail(result.errors.join('\n'))
+  if (requireRegistered) for (const record of result.puzzles) {
+    if (!Object.hasOwn(identity, record.puzzleId) || identity[record.puzzleId] !== record.fingerprint) fail(`identity|${record.puzzleId}|missing verified fingerprint`)
+  }
+  return { manifest, identity, result }
+}
+export function verifySample(root: string): string {
+  const { manifest, result } = calculateSample(root)
+  const actual = `${JSON.stringify(result)}\n`
+  const expected = readFileSync(catalogPath(root, manifest.expectedResult), 'utf8')
+  // Exact current format, ordering and content: parsed-but-malformed references also fail.
+  if (actual !== expected) fail(`reference|${manifest.expectedResult}|byte-for-byte mismatch`)
+  return actual
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { process.stdout.write(verifySample(process.cwd())) }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 }
+}

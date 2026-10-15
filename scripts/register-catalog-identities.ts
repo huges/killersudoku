@@ -1,37 +1,13 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { fingerprintPuzzle, canonicalizePuzzle, verifyCatalog } from '../src/domain/catalogPipeline'
+import { calculateSample } from './verify-catalog'
 
-if (process.argv[2] !== '--output' || !process.argv[3]) {
-  console.error('identity|arguments|usage: --output path')
-  process.exit(2)
-}
-const root = resolve(process.cwd())
-const manifest = JSON.parse(readFileSync(resolve(root, 'catalog/fixtures/manifest.json'), 'utf8')) as { inputs: string[]; formatVersion: string; sampleVersion: string; identityLock: string }
-const puzzles = manifest.inputs.flatMap((path) => {
-  const value = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as unknown
-  return Array.isArray(value) ? value : [value]
-})
-const authoritativePath = resolve(root, manifest.identityLock)
-const authoritative = JSON.parse(readFileSync(authoritativePath, 'utf8')) as Record<string, string>
-const result = verifyCatalog(puzzles, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion })
-if (result.errors.length > 0) { console.error(result.errors[0]); process.exit(1) }
-const output = resolve(process.argv[3])
-if (output !== authoritativePath) {
-  try {
-    readFileSync(output, 'utf8')
-    console.error(`identity|output|refusing to overwrite existing candidate: ${output}`)
-    process.exit(1)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-}
-const next = { ...authoritative }
-for (const puzzle of puzzles) {
-  const id = (puzzle as { puzzleId: string }).puzzleId
-  const fingerprint = fingerprintPuzzle(canonicalizePuzzle(puzzle as never))
-  if (next[id] !== undefined && next[id] !== fingerprint) { console.error(`identity|${id}|historical fingerprint mismatch`); process.exit(1) }
-  next[id] = fingerprint
-}
-writeFileSync(output, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
-console.log(`identity|registered|${output}`)
+try {
+  if (process.argv.length !== 4 || process.argv[2] !== '--output') throw new Error('identity|arguments|usage: --output NEW-candidate-path')
+  const { identity, result } = calculateSample(process.cwd(), false)
+  // Always read the authoritative register, even when writing a separate candidate.
+  const next = { ...identity }
+  for (const record of result.puzzles) next[record.puzzleId] = record.fingerprint!
+  const ordered = Object.fromEntries(Object.entries(next).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))
+  writeFileSync(resolve(process.argv[3]), `${JSON.stringify(ordered, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
+} catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 }

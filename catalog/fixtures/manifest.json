@@ -1,15 +1,27 @@
 {
   "formatVersion": "1",
   "sampleVersion": "technical-1",
-  "generatorVersion": "1.0.0",
+  "generatorVersion": "1",
   "seed": "m2-1-technical",
-  "parameters": {"purpose": "offline-pipeline-smoke-sample"},
-  "inputs": ["catalog/fixtures/inputs.json"],
+  "parameters": {
+    "profile": "technical-v1",
+    "negativeCases": [
+      "duplicate-id",
+      "reused-id",
+      "stale-reference",
+      "incomplete-search"
+    ]
+  },
+  "inputs": [
+    "catalog/fixtures/inputs.json"
+  ],
   "expectedResult": "catalog/results/catalog-result.json",
   "identityLock": "catalog/identity-lock.json",
   "negativeFixtures": [
+    "catalog/fixtures/negative/derived-field.json",
+    "catalog/fixtures/negative/multiple-solutions.json",
     "catalog/fixtures/negative/structurally-invalid.json",
-    "catalog/fixtures/negative/unsatisfiable.json",
-    "catalog/fixtures/negative/derived-field.json"
-  ]
+    "catalog/fixtures/negative/unsatisfiable.json"
+  ],
+  "maxNodes": 100000
 }

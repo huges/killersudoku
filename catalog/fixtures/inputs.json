@@ -1,29 +1,921 @@
 [
   {
     "schemaVersion": "1.0",
-    "puzzleId": "fixture-solved",
+    "puzzleId": "fixture-partial",
     "difficulty": "easy",
     "size": 9,
     "givens": [
-      [1,2,3,4,5,6,7,8,9],
-      [4,5,6,7,8,9,1,2,3],
-      [7,8,9,1,2,3,4,5,6],
-      [2,3,4,5,6,7,8,9,1],
-      [5,6,7,8,9,1,2,3,4],
-      [8,9,1,2,3,4,5,6,7],
-      [3,4,5,6,7,8,9,1,2],
-      [6,7,8,9,1,2,3,4,5],
-      [9,1,2,3,4,5,6,7,8]
+      [
+        5,
+        6,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        8,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
     ],
     "cages": [
-      {"id":"cage-row-0","cells":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":0,"col":4},{"row":0,"col":5},{"row":0,"col":6},{"row":0,"col":7},{"row":0,"col":8}],"sum":45},
-      {"id":"cage-row-1","cells":[{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":1,"col":4},{"row":1,"col":5},{"row":1,"col":6},{"row":1,"col":7},{"row":1,"col":8}],"sum":45},
-      {"id":"cage-row-2","cells":[{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3},{"row":2,"col":4},{"row":2,"col":5},{"row":2,"col":6},{"row":2,"col":7},{"row":2,"col":8}],"sum":45},
-      {"id":"cage-row-3","cells":[{"row":3,"col":0},{"row":3,"col":1},{"row":3,"col":2},{"row":3,"col":3},{"row":3,"col":4},{"row":3,"col":5},{"row":3,"col":6},{"row":3,"col":7},{"row":3,"col":8}],"sum":45},
-      {"id":"cage-row-4","cells":[{"row":4,"col":0},{"row":4,"col":1},{"row":4,"col":2},{"row":4,"col":3},{"row":4,"col":4},{"row":4,"col":5},{"row":4,"col":6},{"row":4,"col":7},{"row":4,"col":8}],"sum":45},
-      {"id":"cage-row-5","cells":[{"row":5,"col":0},{"row":5,"col":1},{"row":5,"col":2},{"row":5,"col":3},{"row":5,"col":4},{"row":5,"col":5},{"row":5,"col":6},{"row":5,"col":7},{"row":5,"col":8}],"sum":45},
-      {"id":"cage-row-6","cells":[{"row":6,"col":0},{"row":6,"col":1},{"row":6,"col":2},{"row":6,"col":3},{"row":6,"col":4},{"row":6,"col":5},{"row":6,"col":6},{"row":6,"col":7},{"row":6,"col":8}],"sum":45},
-      {"id":"cage-row-7","cells":[{"row":7,"col":0},{"row":7,"col":1},{"row":7,"col":2},{"row":7,"col":3},{"row":7,"col":4},{"row":7,"col":5},{"row":7,"col":6},{"row":7,"col":7},{"row":7,"col":8}],"sum":45},
-      {"id":"cage-row-8","cells":[{"row":8,"col":0},{"row":8,"col":1},{"row":8,"col":2},{"row":8,"col":3},{"row":8,"col":4},{"row":8,"col":5},{"row":8,"col":6},{"row":8,"col":7},{"row":8,"col":8}],"sum":45}
+      {
+        "id": "cage-0-0",
+        "cells": [
+          {
+            "row": 0,
+            "col": 0
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-0-1",
+        "cells": [
+          {
+            "row": 0,
+            "col": 1
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-0-2",
+        "cells": [
+          {
+            "row": 0,
+            "col": 2
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-0-3",
+        "cells": [
+          {
+            "row": 0,
+            "col": 3
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-0-4",
+        "cells": [
+          {
+            "row": 0,
+            "col": 4
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-0-5",
+        "cells": [
+          {
+            "row": 0,
+            "col": 5
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-0-6",
+        "cells": [
+          {
+            "row": 0,
+            "col": 6
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-0-7",
+        "cells": [
+          {
+            "row": 0,
+            "col": 7
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-0-8",
+        "cells": [
+          {
+            "row": 0,
+            "col": 8
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-1-0",
+        "cells": [
+          {
+            "row": 1,
+            "col": 0
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-1-1",
+        "cells": [
+          {
+            "row": 1,
+            "col": 1
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-1-2",
+        "cells": [
+          {
+            "row": 1,
+            "col": 2
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-1-3",
+        "cells": [
+          {
+            "row": 1,
+            "col": 3
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-1-4",
+        "cells": [
+          {
+            "row": 1,
+            "col": 4
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-1-5",
+        "cells": [
+          {
+            "row": 1,
+            "col": 5
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-1-6",
+        "cells": [
+          {
+            "row": 1,
+            "col": 6
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-1-7",
+        "cells": [
+          {
+            "row": 1,
+            "col": 7
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-1-8",
+        "cells": [
+          {
+            "row": 1,
+            "col": 8
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-2-0",
+        "cells": [
+          {
+            "row": 2,
+            "col": 0
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-2-1",
+        "cells": [
+          {
+            "row": 2,
+            "col": 1
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-2-2",
+        "cells": [
+          {
+            "row": 2,
+            "col": 2
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-2-3",
+        "cells": [
+          {
+            "row": 2,
+            "col": 3
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-2-4",
+        "cells": [
+          {
+            "row": 2,
+            "col": 4
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-2-5",
+        "cells": [
+          {
+            "row": 2,
+            "col": 5
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-2-6",
+        "cells": [
+          {
+            "row": 2,
+            "col": 6
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-2-7",
+        "cells": [
+          {
+            "row": 2,
+            "col": 7
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-2-8",
+        "cells": [
+          {
+            "row": 2,
+            "col": 8
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-3-0",
+        "cells": [
+          {
+            "row": 3,
+            "col": 0
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-3-1",
+        "cells": [
+          {
+            "row": 3,
+            "col": 1
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-3-2",
+        "cells": [
+          {
+            "row": 3,
+            "col": 2
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-3-3",
+        "cells": [
+          {
+            "row": 3,
+            "col": 3
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-3-4",
+        "cells": [
+          {
+            "row": 3,
+            "col": 4
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-3-5",
+        "cells": [
+          {
+            "row": 3,
+            "col": 5
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-3-6",
+        "cells": [
+          {
+            "row": 3,
+            "col": 6
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-3-7",
+        "cells": [
+          {
+            "row": 3,
+            "col": 7
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-3-8",
+        "cells": [
+          {
+            "row": 3,
+            "col": 8
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-4-0",
+        "cells": [
+          {
+            "row": 4,
+            "col": 0
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-4-1",
+        "cells": [
+          {
+            "row": 4,
+            "col": 1
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-4-2",
+        "cells": [
+          {
+            "row": 4,
+            "col": 2
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-4-3",
+        "cells": [
+          {
+            "row": 4,
+            "col": 3
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-4-4",
+        "cells": [
+          {
+            "row": 4,
+            "col": 4
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-4-5",
+        "cells": [
+          {
+            "row": 4,
+            "col": 5
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-4-6",
+        "cells": [
+          {
+            "row": 4,
+            "col": 6
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-4-7",
+        "cells": [
+          {
+            "row": 4,
+            "col": 7
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-4-8",
+        "cells": [
+          {
+            "row": 4,
+            "col": 8
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-5-0",
+        "cells": [
+          {
+            "row": 5,
+            "col": 0
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-5-1",
+        "cells": [
+          {
+            "row": 5,
+            "col": 1
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-5-2",
+        "cells": [
+          {
+            "row": 5,
+            "col": 2
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-5-3",
+        "cells": [
+          {
+            "row": 5,
+            "col": 3
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-5-4",
+        "cells": [
+          {
+            "row": 5,
+            "col": 4
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-5-5",
+        "cells": [
+          {
+            "row": 5,
+            "col": 5
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-5-6",
+        "cells": [
+          {
+            "row": 5,
+            "col": 6
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-5-7",
+        "cells": [
+          {
+            "row": 5,
+            "col": 7
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-5-8",
+        "cells": [
+          {
+            "row": 5,
+            "col": 8
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-6-0",
+        "cells": [
+          {
+            "row": 6,
+            "col": 0
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-6-1",
+        "cells": [
+          {
+            "row": 6,
+            "col": 1
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-6-2",
+        "cells": [
+          {
+            "row": 6,
+            "col": 2
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-6-3",
+        "cells": [
+          {
+            "row": 6,
+            "col": 3
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-6-4",
+        "cells": [
+          {
+            "row": 6,
+            "col": 4
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-6-5",
+        "cells": [
+          {
+            "row": 6,
+            "col": 5
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-6-6",
+        "cells": [
+          {
+            "row": 6,
+            "col": 6
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-6-7",
+        "cells": [
+          {
+            "row": 6,
+            "col": 7
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-6-8",
+        "cells": [
+          {
+            "row": 6,
+            "col": 8
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-7-0",
+        "cells": [
+          {
+            "row": 7,
+            "col": 0
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-7-1",
+        "cells": [
+          {
+            "row": 7,
+            "col": 1
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-7-2",
+        "cells": [
+          {
+            "row": 7,
+            "col": 2
+          }
+        ],
+        "sum": 3
+      },
+      {
+        "id": "cage-7-3",
+        "cells": [
+          {
+            "row": 7,
+            "col": 3
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-7-4",
+        "cells": [
+          {
+            "row": 7,
+            "col": 4
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-7-5",
+        "cells": [
+          {
+            "row": 7,
+            "col": 5
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-7-6",
+        "cells": [
+          {
+            "row": 7,
+            "col": 6
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-7-7",
+        "cells": [
+          {
+            "row": 7,
+            "col": 7
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-7-8",
+        "cells": [
+          {
+            "row": 7,
+            "col": 8
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-8-0",
+        "cells": [
+          {
+            "row": 8,
+            "col": 0
+          }
+        ],
+        "sum": 4
+      },
+      {
+        "id": "cage-8-1",
+        "cells": [
+          {
+            "row": 8,
+            "col": 1
+          }
+        ],
+        "sum": 5
+      },
+      {
+        "id": "cage-8-2",
+        "cells": [
+          {
+            "row": 8,
+            "col": 2
+          }
+        ],
+        "sum": 6
+      },
+      {
+        "id": "cage-8-3",
+        "cells": [
+          {
+            "row": 8,
+            "col": 3
+          }
+        ],
+        "sum": 7
+      },
+      {
+        "id": "cage-8-4",
+        "cells": [
+          {
+            "row": 8,
+            "col": 4
+          }
+        ],
+        "sum": 8
+      },
+      {
+        "id": "cage-8-5",
+        "cells": [
+          {
+            "row": 8,
+            "col": 5
+          }
+        ],
+        "sum": 9
+      },
+      {
+        "id": "cage-8-6",
+        "cells": [
+          {
+            "row": 8,
+            "col": 6
+          }
+        ],
+        "sum": 1
+      },
+      {
+        "id": "cage-8-7",
+        "cells": [
+          {
+            "row": 8,
+            "col": 7
+          }
+        ],
+        "sum": 2
+      },
+      {
+        "id": "cage-8-8",
+        "cells": [
+          {
+            "row": 8,
+            "col": 8
+          }
+        ],
+        "sum": 3
+      }
+    ]
   }
 ]

@@ -19,7 +19,6 @@ COMMANDS = {
     "install": ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
     "lint": ["npm", "run", "lint"],
     "test": ["npm", "run", "test"],
-    "verify:catalog": ["npm", "run", "verify:catalog"],
     "build": ["npm", "run", "build"],
 }
 
@@ -124,7 +123,7 @@ def run(root: Path, phase: str) -> None:
         if not version.strip().startswith("v22."):
             raise ValueError("Mozart web-game/2 requires Node 22.x")
         stages = {"lint": ["install", "lint"], "test": ["install", "lint", "test"],
-                  "build": ["build"], "validate": ["install", "lint", "test", "verify:catalog", "build"], "lockfile": ["lockfile"]}[phase]
+                  "build": ["build"], "validate": ["install", "lint", "test", "build"], "lockfile": ["lockfile"]}[phase]
         print(f"Mozart {VALIDATOR_VERSION}; cwd={root}; Node={version.strip()}", flush=True)
         for stage in stages:
             print(f"stage={stage}: {' '.join(COMMANDS[stage])}", flush=True)
