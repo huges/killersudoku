@@ -34,7 +34,7 @@ export type CatalogComparisonResult = { equal: boolean; errors: string[] }
 const allowedPuzzleKeys = new Set(['schemaVersion', 'puzzleId', 'difficulty', 'size', 'givens', 'cages'])
 const allowedCageKeys = new Set(['id', 'cells', 'sum'])
 const puzzleIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
-const cageIdPattern = /^cage-[a-z0-9]+(?:-[a-z0-9]+)*$/
+const cageIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

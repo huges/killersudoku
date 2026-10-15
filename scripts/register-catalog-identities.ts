@@ -7,16 +7,26 @@ if (process.argv[2] !== '--output' || !process.argv[3]) {
   process.exit(2)
 }
 const root = resolve(process.cwd())
-const manifest = JSON.parse(readFileSync(resolve(root, 'catalog/fixtures/manifest.json'), 'utf8')) as { inputs: string[]; formatVersion: string; sampleVersion: string }
+const manifest = JSON.parse(readFileSync(resolve(root, 'catalog/fixtures/manifest.json'), 'utf8')) as { inputs: string[]; formatVersion: string; sampleVersion: string; identityLock: string }
 const puzzles = manifest.inputs.flatMap((path) => {
   const value = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as unknown
   return Array.isArray(value) ? value : [value]
 })
+const authoritativePath = resolve(root, manifest.identityLock)
+const authoritative = JSON.parse(readFileSync(authoritativePath, 'utf8')) as Record<string, string>
 const result = verifyCatalog(puzzles, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion })
 if (result.errors.length > 0) { console.error(result.errors[0]); process.exit(1) }
 const output = resolve(process.argv[3])
-const existing = output === resolve(root, 'catalog/identity-lock.json') ? JSON.parse(readFileSync(output, 'utf8')) as Record<string, string> : {}
-const next = { ...existing }
+if (output !== authoritativePath) {
+  try {
+    readFileSync(output, 'utf8')
+    console.error(`identity|output|refusing to overwrite existing candidate: ${output}`)
+    process.exit(1)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+}
+const next = { ...authoritative }
 for (const puzzle of puzzles) {
   const id = (puzzle as { puzzleId: string }).puzzleId
   const fingerprint = fingerprintPuzzle(canonicalizePuzzle(puzzle as never))

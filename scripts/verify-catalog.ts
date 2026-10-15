@@ -2,14 +2,12 @@ import { readFileSync } from 'node:fs'
 import { resolve, relative } from 'node:path'
 import { compareReference, verifyCatalog, type CatalogVerificationResult } from '../src/domain/catalogPipeline'
 
-type Manifest = { formatVersion: string; sampleVersion: string; generatorVersion: string; seed: string; parameters: Record<string, unknown>; inputs: string[]; expectedResult: string; identityLock: string }
+type Manifest = { formatVersion: string; sampleVersion: string; generatorVersion: string; seed: string; parameters: Record<string, unknown>; inputs: string[]; expectedResult: string; identityLock: string; negativeFixtures?: string[] }
 
 const root = resolve(process.cwd())
 const fail = (message: string): never => { throw new Error(message) }
 const readText = (path: string): string => readFileSync(path, 'utf8')
 const readJson = (path: string): unknown => { try { return JSON.parse(readText(path)) } catch { fail(`manifest|${relative(root, path)}|invalid JSON`) } }
-const normalizedPath = (path: string): string => path.split(sep).join('/')
-
 function assertManifest(manifest: unknown): asserts manifest is Manifest {
   if (typeof manifest !== 'object' || manifest === null) fail('manifest|manifest.json|must be an object')
   const value = manifest as Record<string, unknown>
@@ -29,7 +27,7 @@ function main(): void {
   const manifestPath = resolve(root, 'catalog/fixtures/manifest.json')
   const manifest = readJson(manifestPath)
   assertManifest(manifest)
-  const declared = [...manifest.inputs, manifest.expectedResult, manifest.identityLock]
+  const declared = [...manifest.inputs, manifest.expectedResult, manifest.identityLock, ...(manifest.negativeFixtures ?? [])]
   for (const item of declared) {
     if (item.startsWith('/') || !withinCatalog(item) || item.includes('..')) fail(`manifest|${item}|path outside catalog root`)
   }
@@ -51,6 +49,17 @@ function main(): void {
     if (record.structural === 'valid' && record.fingerprint && !identityEntries.some(([id, fingerprint]) => id === record.puzzleId && fingerprint === record.fingerprint)) fail(`identity|${record.puzzleId}|missing verified fingerprint`)
   }
   if (actual.errors.length > 0) fail(actual.errors[0])
+  for (const fixturePath of manifest.negativeFixtures ?? []) {
+    const fixture = readJson(resolve(root, fixturePath))
+    const negative = verifyCatalog([fixture], { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion })
+    const record = negative.puzzles[0]
+    if (!record || negative.errors.length === 0) fail(`negative|${fixturePath}|expected rejection`)
+    const expectedStatus = fixturePath.includes('unsatisfiable') ? 'unsatisfiable'
+      : fixturePath.includes('multiple') ? 'multiple'
+      : fixturePath.includes('incomplete') ? 'incomplete'
+      : 'invalid'
+    if (record.solver.status !== expectedStatus) fail(`negative|${fixturePath}|expected ${expectedStatus}, got ${record.solver.status}`)
+  }
 }
 
 try { main() } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
+import { multipleSolutionPuzzle, partialPuzzle, solvedPuzzle, unsatisfiablePuzzle } from '../src/domain/fixtures'
 import { canonicalizePuzzle, compareReference, fingerprintPuzzle, verifyCatalog } from '../src/domain/catalogPipeline'
 import * as solver from '../src/domain/solver'
 
@@ -63,12 +63,23 @@ describe('offline catalog pipeline', () => {
   it('rejects representative negative fixtures without invoking the solver for structural failures', () => {
     const invalidCage = clone(solvedPuzzle)
     invalidCage.cages[0].cells = [{ row: 0, col: 0 }, { row: 0, col: 0 }]
-    const unsatisfiable = clone(solvedPuzzle)
-    unsatisfiable.givens[0][0] = 9
-    const incomplete = verifyCatalog([partialPuzzle], { maxNodes: 1 })
-    expect(verifyCatalog([invalidCage]).errors[0]).toMatch(/invalid|duplicate|cage/i)
-    expect(verifyCatalog([unsatisfiable]).errors.length).toBeGreaterThan(0)
-    expect(incomplete.errors[0]).toMatch(/incomplete|solver/i)
+    const unsatisfiable = unsatisfiablePuzzle()
+    const multiple = multipleSolutionPuzzle()
+    const incomplete = verifyCatalog([multiple], { maxNodes: 1 })
+    const invalidResult = verifyCatalog([invalidCage])
+    const unsatisfiableResult = verifyCatalog([unsatisfiable])
+    const multipleResult = verifyCatalog([multiple])
+    expect(invalidResult.puzzles[0].errors[0]).toMatch(/invalid|duplicate|cage/i)
+    expect(invalidResult.puzzles[0].solver.status).toBe('invalid')
+    expect(unsatisfiableResult.puzzles[0].solver.status).toBe('unsatisfiable')
+    expect(unsatisfiableResult.puzzles[0].solver.count).toBe(0)
+    expect(unsatisfiableResult.puzzles[0].errors[0]).toMatch(/unsatisfiable; count=0; complete=true/)
+    expect(multipleResult.puzzles[0].solver.status).toBe('multiple')
+    expect(multipleResult.puzzles[0].solver.count).toBe(2)
+    expect(multipleResult.puzzles[0].errors[0]).toMatch(/multiple; count=2; complete=true/)
+    expect(incomplete.puzzles[0].solver.status).toBe('incomplete')
+    expect(incomplete.puzzles[0].solver.complete).toBe(false)
+    expect(incomplete.errors[0]).toMatch(/incomplete; count=0; complete=false/)
   })
 
   it('compares canonical references byte-for-byte', () => {
