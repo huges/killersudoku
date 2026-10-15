@@ -195,6 +195,18 @@ describe('offline catalog pipeline', () => {
     expect(() => verifySample(root)).not.toThrow()
   })
 
+  it('rejects malformed versioned scenario descriptors before using their fields', () => {
+    const dir = sandbox()
+    const descriptor = join(dir, 'catalog/fixtures/negative/scenario-incomplete-search.json')
+    writeFileSync(descriptor, JSON.stringify({
+      formatVersion: '1', scenario: 'malformed', source: 'catalog/fixtures/negative/multiple-solutions.json',
+      transform: 'none', expected: { control: 'solver', cause: 'incomplete' }, options: { maxNodes: 0 },
+    }))
+    const result = cli('verify-catalog', dir)
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('invalid scenario descriptor')
+  })
+
   it('enforces verification from the npm test/build commands used by governed validation', () => {
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
     expect(pkg.scripts.test).toContain('&& npm run verify:catalog')

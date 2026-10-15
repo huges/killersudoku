@@ -8,8 +8,26 @@ export type Manifest = {
   seed: string; parameters: Record<string, unknown>; inputs: string[]
   expectedResult: string; identityLock: string; negativeFixtures: string[]; maxNodes: number
 }
+type ScenarioExpected = { control: string; cause: string }
+type ScenarioOptions = { maxNodes: number }
+type NegativeScenario = {
+  formatVersion: string; scenario: string; source: string; transform: string
+  expected: ScenarioExpected; options?: ScenarioOptions
+}
 const fail = (message: string): never => { throw new Error(message) }
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+const isScenario = (value: unknown, formatVersion: string): value is NegativeScenario => {
+  if (!object(value) || value.formatVersion !== formatVersion || typeof value.scenario !== 'string' || value.scenario.length === 0
+    || typeof value.source !== 'string' || value.source.length === 0
+    || (value.transform !== 'duplicate-first-puzzle' && value.transform !== 'clear-first-given' && value.transform !== 'none')) return false
+  const expected = value.expected
+  if (!object(expected) || typeof expected.control !== 'string' || expected.control.length === 0
+    || typeof expected.cause !== 'string' || expected.cause.length === 0) return false
+  const options = value.options
+  if (options === undefined) return true
+  return object(options) && Object.keys(options).length === 1
+    && Number.isSafeInteger(options.maxNodes) && options.maxNodes > 0
+}
 export function readJson(path: string): unknown {
   try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return fail(`file|${path}|missing or invalid JSON`) }
 }
@@ -56,23 +74,27 @@ function expectNegative(root: string, path: string, manifest: Manifest): void {
 
 function expectScenario(root: string, path: string, manifest: Manifest): void {
   const raw = readJson(catalogPath(root, path))
-  if (!object(raw) || raw.formatVersion !== manifest.formatVersion || typeof raw.scenario !== 'string'
-    || typeof raw.source !== 'string' || typeof raw.transform !== 'string' || !object(raw.expected)
-    || typeof raw.expected.control !== 'string' || typeof raw.expected.cause !== 'string') {
-    fail(`negative|${path}|invalid scenario descriptor`)
-  }
+  if (!isScenario(raw, manifest.formatVersion)) fail(`negative|${path}|invalid scenario descriptor`)
   const source = catalogPath(root, raw.source)
   const sourceValue = readJson(source)
   const base = Array.isArray(sourceValue) ? sourceValue : [sourceValue]
+  if (base.length === 0) fail(`negative|${path}|scenario source must contain a puzzle`)
   const transformed = base.map(value => structuredClone(value))
   if (raw.transform === 'duplicate-first-puzzle') transformed.push(structuredClone(transformed[0]))
   else if (raw.transform === 'clear-first-given') {
-    const puzzle = transformed[0] as Record<string, unknown>
-    const givens = puzzle.givens as unknown[][]
-    givens[0][0] = null
+    const puzzle = transformed[0]
+    if (!object(puzzle) || !Array.isArray(puzzle.givens) || puzzle.givens.length === 0
+      || puzzle.givens.some(row => !Array.isArray(row) || row.length === 0)) {
+      fail(`negative|${path}|scenario source has invalid givens`)
+    }
+    const firstRow = puzzle.givens[0]
+    if (!Array.isArray(firstRow) || firstRow.length === 0) {
+      fail(`negative|${path}|scenario source has invalid first row`)
+    }
+    firstRow[0] = null
   } else if (raw.transform !== 'none') fail(`negative|${path}|unknown transformation`)
-  const options = object(raw.options) && Number.isSafeInteger(raw.options.maxNodes) ? { maxNodes: raw.options.maxNodes as number } : undefined
-  const result = verifyCatalog(transformed, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes: options?.maxNodes ?? manifest.maxNodes, identity: loadSample(root).identity })
+  const maxNodes = raw.options?.maxNodes ?? manifest.maxNodes
+  const result = verifyCatalog(transformed, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes, identity: loadSample(root).identity })
   const text = result.errors.join('\n')
   if (result.errors.length !== 1 || !text.includes(raw.expected.control) || !text.includes(raw.expected.cause)) fail(`negative|${path}|unexpected failure: ${text}`)
 }
