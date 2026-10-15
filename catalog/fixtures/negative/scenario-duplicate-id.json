@@ -1,0 +1,10 @@
+{
+  "formatVersion": "1",
+  "scenario": "duplicate-puzzle-id",
+  "source": "catalog/fixtures/inputs.json",
+  "transform": "duplicate-first-puzzle",
+  "expected": {
+    "control": "identifier",
+    "cause": "duplicate identifier in catalog"
+  }
+}

@@ -1,0 +1,1 @@
+{"formatVersion":"1","sampleVersion":"technical-1","verifierVersion":"1","maxNodes":100000,"puzzles":[{"puzzleId":"fixture-partial","fingerprint":"sha256-dc58a1ff4e278c09f49ed8796740c7b582f5029d3a833fe547ed12c743b19c18","structural":"valid","solver":{"status":"unique","count":1,"complete":true,"nodes":1},"complete":true,"nodes":1,"errors":[]}],"errors":[]}
