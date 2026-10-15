@@ -39,8 +39,54 @@ export function loadSample(root: string) {
   if (!object(identity) || Object.values(identity).some(v => typeof v !== 'string' || !/^sha256-[0-9a-f]{64}$/.test(v))) fail('identity|schema|invalid SHA-256 register')
   return { manifest: m, puzzles, identity: identity as Record<string, string> }
 }
+function expectNegative(root: string, path: string, manifest: Manifest): void {
+  const value = readJson(catalogPath(root, path))
+  if (!object(value) || typeof value.puzzleId !== 'string') fail(`negative|${path}|fixture must be a puzzle object`)
+  const result = verifyCatalog([value], { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes: manifest.maxNodes })
+  const text = result.errors.join('\n')
+  const expected = path.endsWith('derived-field.json')
+    ? ['Invalid domain data', 'invalid puzzle metadata']
+    : path.endsWith('multiple-solutions.json')
+      ? ['solver', 'multiple']
+      : path.endsWith('structurally-invalid.json')
+        ? ['Invalid domain data', 'must not be empty']
+        : ['solver', 'unsatisfiable']
+  if (!text.includes(expected[0]) || !text.includes(expected[1])) fail(`negative|${path}|unexpected failure: ${text}`)
+}
+
+function expectScenario(root: string, path: string, manifest: Manifest): void {
+  const raw = readJson(catalogPath(root, path))
+  if (!object(raw) || raw.formatVersion !== manifest.formatVersion || typeof raw.scenario !== 'string'
+    || typeof raw.source !== 'string' || typeof raw.transform !== 'string' || !object(raw.expected)
+    || typeof raw.expected.control !== 'string' || typeof raw.expected.cause !== 'string') {
+    fail(`negative|${path}|invalid scenario descriptor`)
+  }
+  const source = catalogPath(root, raw.source)
+  const sourceValue = readJson(source)
+  const base = Array.isArray(sourceValue) ? sourceValue : [sourceValue]
+  const transformed = base.map(value => structuredClone(value))
+  if (raw.transform === 'duplicate-first-puzzle') transformed.push(structuredClone(transformed[0]))
+  else if (raw.transform === 'clear-first-given') {
+    const puzzle = transformed[0] as Record<string, unknown>
+    const givens = puzzle.givens as unknown[][]
+    givens[0][0] = null
+  } else if (raw.transform !== 'none') fail(`negative|${path}|unknown transformation`)
+  const options = object(raw.options) && Number.isSafeInteger(raw.options.maxNodes) ? { maxNodes: raw.options.maxNodes as number } : undefined
+  const result = verifyCatalog(transformed, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes: options?.maxNodes ?? manifest.maxNodes, identity: loadSample(root).identity })
+  const text = result.errors.join('\n')
+  if (result.errors.length !== 1 || !text.includes(raw.expected.control) || !text.includes(raw.expected.cause)) fail(`negative|${path}|unexpected failure: ${text}`)
+}
+
+function verifyNegatives(root: string, manifest: Manifest): void {
+  for (const path of manifest.negativeFixtures) {
+    if (path.includes('/scenario-')) expectScenario(root, path, manifest)
+    else expectNegative(root, path, manifest)
+  }
+}
+
 export function calculateSample(root: string, requireRegistered = true) {
   const { manifest, puzzles, identity } = loadSample(root)
+  verifyNegatives(root, manifest)
   const result = verifyCatalog(puzzles, { formatVersion: manifest.formatVersion, sampleVersion: manifest.sampleVersion, maxNodes: manifest.maxNodes, identity })
   if (result.errors.length) fail(result.errors.join('\n'))
   if (requireRegistered) for (const record of result.puzzles) {

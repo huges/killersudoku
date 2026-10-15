@@ -20,6 +20,9 @@
   "negativeFixtures": [
     "catalog/fixtures/negative/derived-field.json",
     "catalog/fixtures/negative/multiple-solutions.json",
+    "catalog/fixtures/negative/scenario-duplicate-id.json",
+    "catalog/fixtures/negative/scenario-incomplete-search.json",
+    "catalog/fixtures/negative/scenario-reused-id.json",
     "catalog/fixtures/negative/structurally-invalid.json",
     "catalog/fixtures/negative/unsatisfiable.json"
   ],

@@ -88,14 +88,19 @@ verificate: vengono sostituiti dai risultati calcolati, non conservati come stor
 
 ## Fixture e test
 
-Le fixture JSON negative coprono struttura invalida, campo derivato,
-non risolvibilità strutturalmente valida e molteplicità reale. I casi versionati
-nei test derivano da questi input: duplicazione ID, modifica sotto ID registrato,
-riferimento mancante/malformato/obsoleto e limite 1/4 sulla fixture multipla.
-Non sono inclusi nel campione positivo. I test verificano gli esiti specifici,
-non soltanto un fallimento generico, e invocano le CLI reali in directory isolate.
-Coprono ordine validazione/solver, output stabile, hash, namespace, storico,
-generazione, nessuna sovrascrittura, percorsi e immutabilità dei file.
+Le fixture JSON negative versionate e dichiarate nel manifest coprono struttura invalida,
+campo derivato, non risolvibilità strutturalmente valida e molteplicità reale.
+I tre descrittori di scenario riusano le fixture esistenti senza duplicare griglie:
+`scenario-duplicate-id.json` verifica la causa `identifier` per un ID duplicato,
+`scenario-reused-id.json` verifica `identity-lock` quando cambia il contenuto sotto
+un ID registrato, e `scenario-incomplete-search.json` applica `maxNodes=1` alla
+fixture multiple-solutions e richiede l'esito `solver|incomplete`. `verify:catalog`
+esegue direttamente ogni fixture e scenario, confronta controllo e causa attesi,
+e fallisce se un caso viene accettato o rifiutato per una causa diversa.
+Non sono inclusi nel campione positivo. I test invocano inoltre le CLI reali in
+directory isolate e coprono ordine validazione/solver, output stabile, hash,
+namespace, storico, generazione, nessuna sovrascrittura, percorsi e immutabilità
+dei file.
 
 Il rollback consiste nel ripristino con Git dell'intero insieme coerente di
 codice, fixture, manifest, registro e risultato; nessuno schema database cambia.

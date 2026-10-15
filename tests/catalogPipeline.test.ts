@@ -185,6 +185,16 @@ describe('offline catalog pipeline', () => {
     expect(r.stdout).not.toContain('> tsc --project')
     expect(r.stdout).not.toContain('building for production')
   })
+  it('executes the versioned negative scenarios through verify:catalog', () => {
+    const manifest = JSON.parse(readFileSync(resolve(root, 'catalog/fixtures/manifest.json'), 'utf8'))
+    expect(manifest.negativeFixtures).toEqual(expect.arrayContaining([
+      'catalog/fixtures/negative/scenario-duplicate-id.json',
+      'catalog/fixtures/negative/scenario-reused-id.json',
+      'catalog/fixtures/negative/scenario-incomplete-search.json',
+    ]))
+    expect(() => verifySample(root)).not.toThrow()
+  })
+
   it('enforces verification from the npm test/build commands used by governed validation', () => {
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
     expect(pkg.scripts.test).toContain('&& npm run verify:catalog')

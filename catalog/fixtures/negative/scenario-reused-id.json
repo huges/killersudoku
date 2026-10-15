@@ -1,0 +1,10 @@
+{
+  "formatVersion": "1",
+  "scenario": "reused-puzzle-id-content",
+  "source": "catalog/fixtures/inputs.json",
+  "transform": "clear-first-given",
+  "expected": {
+    "control": "identity-lock",
+    "cause": "historical fingerprint mismatch"
+  }
+}

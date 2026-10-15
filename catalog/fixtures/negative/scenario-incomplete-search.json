@@ -1,0 +1,13 @@
+{
+  "formatVersion": "1",
+  "scenario": "incomplete-search",
+  "source": "catalog/fixtures/negative/multiple-solutions.json",
+  "transform": "none",
+  "options": {
+    "maxNodes": 1
+  },
+  "expected": {
+    "control": "solver",
+    "cause": "incomplete"
+  }
+}
