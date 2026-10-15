@@ -14,7 +14,9 @@ type NegativeScenario = {
   formatVersion: string; scenario: string; source: string; transform: string
   expected: ScenarioExpected; options?: ScenarioOptions
 }
-const fail = (message: string): never => { throw new Error(message) }
+function fail(message: string): never {
+  throw new Error(message)
+}
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isScenario = (value: unknown, formatVersion: string): value is NegativeScenario => {
   if (!object(value) || value.formatVersion !== formatVersion || typeof value.scenario !== 'string' || value.scenario.length === 0
@@ -26,6 +28,7 @@ const isScenario = (value: unknown, formatVersion: string): value is NegativeSce
   const options = value.options
   if (options === undefined) return true
   return object(options) && Object.keys(options).length === 1
+    && typeof options.maxNodes === 'number'
     && Number.isSafeInteger(options.maxNodes) && options.maxNodes > 0
 }
 export function readJson(path: string): unknown {
@@ -74,7 +77,9 @@ function expectNegative(root: string, path: string, manifest: Manifest): void {
 
 function expectScenario(root: string, path: string, manifest: Manifest): void {
   const raw = readJson(catalogPath(root, path))
-  if (!isScenario(raw, manifest.formatVersion)) fail(`negative|${path}|invalid scenario descriptor`)
+  if (!isScenario(raw, manifest.formatVersion)) {
+    fail(`negative|${path}|invalid scenario descriptor`)
+  }
   const source = catalogPath(root, raw.source)
   const sourceValue = readJson(source)
   const base = Array.isArray(sourceValue) ? sourceValue : [sourceValue]
