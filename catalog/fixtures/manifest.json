@@ -1,0 +1,10 @@
+{
+  "formatVersion": "1",
+  "sampleVersion": "technical-1",
+  "generatorVersion": "1.0.0",
+  "seed": "m2-1-technical",
+  "parameters": {"purpose": "offline-pipeline-smoke-sample"},
+  "inputs": ["catalog/fixtures/inputs.json"],
+  "expectedResult": "catalog/results/catalog-result.json",
+  "identityLock": "catalog/identity-lock.json"
+}

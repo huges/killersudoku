@@ -1,0 +1,29 @@
+[
+  {
+    "schemaVersion": "1.0",
+    "puzzleId": "fixture-solved",
+    "difficulty": "easy",
+    "size": 9,
+    "givens": [
+      [1,2,3,4,5,6,7,8,9],
+      [4,5,6,7,8,9,1,2,3],
+      [7,8,9,1,2,3,4,5,6],
+      [2,3,4,5,6,7,8,9,1],
+      [5,6,7,8,9,1,2,3,4],
+      [8,9,1,2,3,4,5,6,7],
+      [3,4,5,6,7,8,9,1,2],
+      [6,7,8,9,1,2,3,4,5],
+      [9,1,2,3,4,5,6,7,8]
+    ],
+    "cages": [
+      {"id":"cage-row-0","cells":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":0,"col":4},{"row":0,"col":5},{"row":0,"col":6},{"row":0,"col":7},{"row":0,"col":8}],"sum":45},
+      {"id":"cage-row-1","cells":[{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":1,"col":4},{"row":1,"col":5},{"row":1,"col":6},{"row":1,"col":7},{"row":1,"col":8}],"sum":45},
+      {"id":"cage-row-2","cells":[{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3},{"row":2,"col":4},{"row":2,"col":5},{"row":2,"col":6},{"row":2,"col":7},{"row":2,"col":8}],"sum":45},
+      {"id":"cage-row-3","cells":[{"row":3,"col":0},{"row":3,"col":1},{"row":3,"col":2},{"row":3,"col":3},{"row":3,"col":4},{"row":3,"col":5},{"row":3,"col":6},{"row":3,"col":7},{"row":3,"col":8}],"sum":45},
+      {"id":"cage-row-4","cells":[{"row":4,"col":0},{"row":4,"col":1},{"row":4,"col":2},{"row":4,"col":3},{"row":4,"col":4},{"row":4,"col":5},{"row":4,"col":6},{"row":4,"col":7},{"row":4,"col":8}],"sum":45},
+      {"id":"cage-row-5","cells":[{"row":5,"col":0},{"row":5,"col":1},{"row":5,"col":2},{"row":5,"col":3},{"row":5,"col":4},{"row":5,"col":5},{"row":5,"col":6},{"row":5,"col":7},{"row":5,"col":8}],"sum":45},
+      {"id":"cage-row-6","cells":[{"row":6,"col":0},{"row":6,"col":1},{"row":6,"col":2},{"row":6,"col":3},{"row":6,"col":4},{"row":6,"col":5},{"row":6,"col":6},{"row":6,"col":7},{"row":6,"col":8}],"sum":45},
+      {"id":"cage-row-7","cells":[{"row":7,"col":0},{"row":7,"col":1},{"row":7,"col":2},{"row":7,"col":3},{"row":7,"col":4},{"row":7,"col":5},{"row":7,"col":6},{"row":7,"col":7},{"row":7,"col":8}],"sum":45},
+      {"id":"cage-row-8","cells":[{"row":8,"col":0},{"row":8,"col":1},{"row":8,"col":2},{"row":8,"col":3},{"row":8,"col":4},{"row":8,"col":5},{"row":8,"col":6},{"row":8,"col":7},{"row":8,"col":8}],"sum":45}
+  }
+]

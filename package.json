@@ -11,6 +11,10 @@
     "lint": "eslint src tests vite.config.ts vitest.config.ts eslint.config.js --config eslint.config.js",
     "typecheck": "tsc --project tsconfig.app.json --noEmit && tsc --project tsconfig.node.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "verify:catalog": "tsx scripts/verify-catalog.ts",
+    "catalog:generate-fixtures": "tsx scripts/generate-catalog-fixtures.ts",
+    "catalog:update-reference": "tsx scripts/update-catalog-reference.ts",
+    "catalog:register-identities": "tsx scripts/register-catalog-identities.ts",
     "build": "npm run typecheck && vite build --config vite.config.ts"
   },
   "dependencies": {
@@ -34,6 +38,7 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.3",
     "vite": "7.1.7",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "tsx": "4.19.2"
   }
 }
