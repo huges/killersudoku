@@ -1,0 +1,21 @@
+{
+  "formatVersion": "1",
+  "sampleVersion": "technical-1",
+  "puzzles": [
+    {
+      "puzzleId": "fixture-solved",
+      "fingerprint": "sha256-UNRESOLVED",
+      "structural": "valid",
+      "solver": {
+        "status": "unique",
+        "count": 1,
+        "complete": true,
+        "nodes": 1
+      },
+      "complete": true,
+      "nodes": 1,
+      "errors": []
+    }
+  ],
+  "errors": []
+}

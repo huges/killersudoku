@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { type PuzzleDefinition } from './types'
 import { solve, type SolverResult } from './solver'
 import { ValidationError, validatePuzzle } from './validation'
@@ -80,20 +81,20 @@ export function canonicalizePuzzle(validatedPuzzle: PuzzleDefinition): string {
     size: validatedPuzzle.size,
     givens: validatedPuzzle.givens.map((row) => [...row]),
     cages: validatedPuzzle.cages
-      .map((cage) => ({ id: cage.id, sum: cage.sum, cells: cage.cells.map((cell) => ({ row: cell.row, col: cell.col })) }))
+      .map((cage) => ({
+        id: cage.id,
+        sum: cage.sum,
+        cells: cage.cells
+          .map((cell) => ({ row: cell.row, col: cell.col }))
+          .sort((left, right) => left.row - right.row || left.col - right.col),
+      }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   }
   return stable(canonical)
 }
 
 export function fingerprintPuzzle(canonicalPuzzle: string): string {
-  const puzzleId = /\"puzzleId\":\"([^\"]+)\"/.exec(canonicalPuzzle)?.[1] ?? 'unknown'
-  const givensText = /\"givens\":(\[\[.*?\]\]),\"cages\"/.exec(canonicalPuzzle)?.[1]
-  if (!givensText) throw new Error(error('fingerprint', 'givens', 'canonical representation is malformed'))
-  const givens = JSON.parse(givensText) as Array<Array<number | null>>
-  const nulls = givens.flat().filter((value) => value === null).length
-  const sum = givens.flat().reduce((total, value) => total + (value ?? 0), 0)
-  return `catalog-${puzzleId}-${nulls}-${sum}`
+  return `sha256-${createHash('sha256').update(canonicalPuzzle, 'utf8').digest('hex')}`
 }
 
 function invalidRecord(input: unknown, errors: string[]): CatalogPuzzleRecord {

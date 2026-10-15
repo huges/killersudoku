@@ -35,6 +35,42 @@ describe('offline catalog pipeline', () => {
     expect(verifyCatalog([changed], { identity: { [changed.puzzleId]: fingerprint } }).errors[0]).toMatch(/historical fingerprint mismatch/)
   })
 
+  it('fingerprints the complete canonical representation with SHA-256', () => {
+    const original = canonicalizePuzzle(solvedPuzzle)
+    const changed = clone(solvedPuzzle)
+    changed.givens[0][0] = null
+    expect(fingerprintPuzzle(original)).toMatch(/^sha256-[0-9a-f]{64}$/)
+    expect(fingerprintPuzzle(original)).not.toBe(fingerprintPuzzle(canonicalizePuzzle(changed)))
+  })
+
+  it('canonicalizes cage and cell order without mutating validated input', () => {
+    const shuffled = clone(solvedPuzzle)
+    shuffled.cages = [...shuffled.cages].reverse()
+    shuffled.cages[0].cells = [...shuffled.cages[0].cells].reverse()
+    const before = clone(shuffled)
+    expect(canonicalizePuzzle(shuffled)).toBe(canonicalizePuzzle(solvedPuzzle))
+    expect(shuffled).toEqual(before)
+  })
+
+  it('rejects derived fields and incomplete searches deterministically', () => {
+    const derived = { ...clone(solvedPuzzle), solution: solvedPuzzle.givens }
+    expect(verifyCatalog([derived]).puzzles[0].errors[0]).toMatch(/unknown field/)
+    const result = verifyCatalog([partialPuzzle], { maxNodes: 1 })
+    expect(result.puzzles[0].solver.status).toBe('incomplete')
+    expect(result.errors[0]).toMatch(/incomplete/)
+  })
+
+  it('rejects representative negative fixtures without invoking the solver for structural failures', () => {
+    const invalidCage = clone(solvedPuzzle)
+    invalidCage.cages[0].cells = [{ row: 0, col: 0 }, { row: 0, col: 0 }]
+    const unsatisfiable = clone(solvedPuzzle)
+    unsatisfiable.givens[0][0] = 9
+    const incomplete = verifyCatalog([partialPuzzle], { maxNodes: 1 })
+    expect(verifyCatalog([invalidCage]).errors[0]).toMatch(/invalid|duplicate|cage/i)
+    expect(verifyCatalog([unsatisfiable]).errors.length).toBeGreaterThan(0)
+    expect(incomplete.errors[0]).toMatch(/incomplete|solver/i)
+  })
+
   it('compares canonical references byte-for-byte', () => {
     const result = verifyCatalog([partialPuzzle])
     expect(compareReference(result, clone(result))).toEqual({ equal: true, errors: [] })

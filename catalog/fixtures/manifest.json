@@ -6,5 +6,10 @@
   "parameters": {"purpose": "offline-pipeline-smoke-sample"},
   "inputs": ["catalog/fixtures/inputs.json"],
   "expectedResult": "catalog/results/catalog-result.json",
-  "identityLock": "catalog/identity-lock.json"
+  "identityLock": "catalog/identity-lock.json",
+  "negativeFixtures": [
+    "catalog/fixtures/negative/structurally-invalid.json",
+    "catalog/fixtures/negative/unsatisfiable.json",
+    "catalog/fixtures/negative/derived-field.json"
+  ]
 }
