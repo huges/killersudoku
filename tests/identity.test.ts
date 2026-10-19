@@ -314,7 +314,16 @@ describe('playable content identity', () => {
     const snapshot = structuredClone(symmetric)
     for (const transformation of Object.keys(expectedD4) as D4Transformation[]) {
       const transformed = transformPlayableContent(symmetric, transformation)
+      const independentlyConstructedExpected = {
+        size: 9 as const,
+        clues: [],
+        cages: Array.from({ length: 9 }, (_, row) =>
+          Array.from({ length: 9 }, (_, col) => ({ cells: [{ row, col }], sum: 1 })),
+        ).flat(),
+      }
       expectValid(transformed)
+      expectValid(independentlyConstructedExpected)
+      expect(canonicalizePlayableContent(transformed)).toBe(canonicalizePlayableContent(independentlyConstructedExpected))
       expect(arePlayableContentsD4Equivalent(symmetric, transformed)).toBe(true)
     }
     expect(symmetric).toEqual(snapshot)
@@ -339,6 +348,27 @@ describe('playable content identity', () => {
     expect(() => arePlayableContentsD4Equivalent(original, { ...original, size: 8 } as unknown as PlayableContent)).toThrow(ValidationError)
     expect(() => transformPlayableContent({ ...original, cages: [] }, 'identity')).toThrow(ValidationError)
     expect(() => transformPlayableContent({ ...original, clues: [{ row: 9, col: 0, value: 4 }] }, 'identity')).toThrow(ValidationError)
+  })
+
+  it('rejects every non-D4 runtime identifier with a stable diagnostic without mutation', () => {
+    const invalidTransformations: unknown[] = [
+      Symbol('rotate45'),
+      Object.create(null),
+      { name: 'rotate45' },
+      () => 'rotate45',
+      null,
+      undefined,
+    ]
+
+    for (const transformation of invalidTransformations) {
+      const original = independentFixture(asymmetricClues)
+      const snapshot = structuredClone(original)
+      expect(() => transformPlayableContent(original, transformation as D4Transformation)).toThrow(ValidationError)
+      expect(() => transformPlayableContent(original, transformation as D4Transformation)).toThrow(
+        'transformation: unsupported D4 transformation',
+      )
+      expect(original).toEqual(snapshot)
+    }
   })
 
   it('exposes the versioned D4 contract and compares complete canonical strings', () => {

@@ -226,10 +226,8 @@ function assertD4Transformation(transformation: D4Transformation): void {
     case 'reflectMainDiagonal':
     case 'reflectAntiDiagonal':
       return
-    default: {
-      const invalid = transformation as string
-      throw new ValidationError(`transformation: unsupported D4 transformation ${invalid}`)
-    }
+    default:
+      throw new ValidationError('transformation: unsupported D4 transformation')
   }
 }
 
