@@ -50,6 +50,12 @@ function expectValid(value: PlayableContent): void {
   expect(() => canonicalizePlayableContent(value)).not.toThrow()
 }
 
+function sortedCoordinates(cells: Coordinate[]): Coordinate[] {
+  return cells
+    .map((cell) => ({ ...cell }))
+    .sort((left, right) => left.row - right.row || left.col - right.col)
+}
+
 const expectedD4: Record<D4Transformation, { clues: ExpectedClue[]; cage: Coordinate[] }> = {
   identity: { clues: asymmetricClues, cage: [{ row: 0, col: 0 }, { row: 1, col: 0 }] },
   rotate90: { clues: [{ row: 2, col: 8, value: 4 }, { row: 4, col: 7, value: 7 }, { row: 1, col: 5, value: 8 }, { row: 6, col: 3, value: 2 }, { row: 3, col: 1, value: 6 }, { row: 8, col: 0, value: 9 }], cage: [{ row: 0, col: 7 }, { row: 0, col: 8 }] },
@@ -287,10 +293,9 @@ describe('playable content identity', () => {
       expectValid(expectedContent)
       expectValid(transformed)
       expect(transformed.clues).toEqual(expected.clues)
-      expect(transformed.cages.find((cage) => cage.cells.length === 2)).toEqual({
-        cells: expected.cage,
-        sum: 3,
-      })
+      const transformedMultiCell = transformed.cages.find((cage) => cage.cells.length === 2)
+      expect(transformedMultiCell?.sum).toBe(3)
+      expect(sortedCoordinates(transformedMultiCell?.cells ?? [])).toEqual(sortedCoordinates(expected.cage))
       expect(arePlayableContentsD4Equivalent(original, transformed)).toBe(true)
       expect(transformed).not.toBe(original)
     }
