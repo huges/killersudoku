@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { partialPuzzle } from '../src/domain/fixtures'
 import {
+  arePlayableContentsD4Equivalent,
   canonicalizePlayableContent,
+  D4_EQUIVALENCE_ALGORITHM_VERSION,
   extractPlayableContent,
   fingerprintPlayableContent,
+  transformPlayableContent,
+  type D4Transformation,
   type PlayableContent,
 } from '../src/domain/identity'
 import { ValidationError } from '../src/domain/validation'
@@ -16,6 +20,51 @@ function content(): PlayableContent {
 function expectInvalid(value: unknown): void {
   expect(() => canonicalizePlayableContent(value as PlayableContent)).toThrow(ValidationError)
   expect(() => fingerprintPlayableContent(value as PlayableContent)).toThrow(ValidationError)
+}
+
+type Coordinate = { row: number; col: number }
+type ExpectedClue = Coordinate & { value: number }
+
+const asymmetricClues: ExpectedClue[] = [
+  { row: 0, col: 2, value: 4 }, { row: 1, col: 4, value: 7 },
+  { row: 3, col: 1, value: 8 }, { row: 5, col: 6, value: 2 },
+  { row: 7, col: 3, value: 6 }, { row: 8, col: 8, value: 9 },
+]
+const asymmetricCage = [{ row: 0, col: 0 }, { row: 1, col: 0 }]
+
+function independentFixture(clues: ExpectedClue[], multiCell = asymmetricCage, multiSum = 3): PlayableContent {
+  const clueByCoordinate = new Map(clues.map((clue) => [`${clue.row}:${clue.col}`, clue.value]))
+  const multiKeys = new Set(multiCell.map((cell) => `${cell.row}:${cell.col}`))
+  const cages = [{ cells: multiCell.map((cell) => ({ ...cell })), sum: multiSum }]
+  for (let row = 0; row < 9; row += 1) for (let col = 0; col < 9; col += 1) {
+    const key = `${row}:${col}`
+    if (!multiKeys.has(key)) cages.push({
+      cells: [{ row, col }],
+      sum: clueByCoordinate.get(key) ?? 1,
+    })
+  }
+  return { size: 9, clues: clues.map((clue) => ({ ...clue })), cages }
+}
+
+function expectValid(value: PlayableContent): void {
+  expect(() => canonicalizePlayableContent(value)).not.toThrow()
+}
+
+function sortedCoordinates(cells: Coordinate[]): Coordinate[] {
+  return cells
+    .map((cell) => ({ ...cell }))
+    .sort((left, right) => left.row - right.row || left.col - right.col)
+}
+
+const expectedD4: Record<D4Transformation, { clues: ExpectedClue[]; cage: Coordinate[] }> = {
+  identity: { clues: asymmetricClues, cage: [{ row: 0, col: 0 }, { row: 1, col: 0 }] },
+  rotate90: { clues: [{ row: 2, col: 8, value: 4 }, { row: 4, col: 7, value: 7 }, { row: 1, col: 5, value: 8 }, { row: 6, col: 3, value: 2 }, { row: 3, col: 1, value: 6 }, { row: 8, col: 0, value: 9 }], cage: [{ row: 0, col: 7 }, { row: 0, col: 8 }] },
+  rotate180: { clues: [{ row: 8, col: 6, value: 4 }, { row: 7, col: 4, value: 7 }, { row: 5, col: 7, value: 8 }, { row: 3, col: 2, value: 2 }, { row: 1, col: 5, value: 6 }, { row: 0, col: 0, value: 9 }], cage: [{ row: 7, col: 8 }, { row: 8, col: 8 }] },
+  rotate270: { clues: [{ row: 6, col: 0, value: 4 }, { row: 4, col: 1, value: 7 }, { row: 7, col: 3, value: 8 }, { row: 2, col: 5, value: 2 }, { row: 5, col: 7, value: 6 }, { row: 0, col: 8, value: 9 }], cage: [{ row: 8, col: 0 }, { row: 8, col: 1 }] },
+  reflectVertical: { clues: [{ row: 0, col: 6, value: 4 }, { row: 1, col: 4, value: 7 }, { row: 3, col: 7, value: 8 }, { row: 5, col: 2, value: 2 }, { row: 7, col: 5, value: 6 }, { row: 8, col: 0, value: 9 }], cage: [{ row: 0, col: 8 }, { row: 1, col: 8 }] },
+  reflectHorizontal: { clues: [{ row: 8, col: 2, value: 4 }, { row: 7, col: 4, value: 7 }, { row: 5, col: 1, value: 8 }, { row: 3, col: 6, value: 2 }, { row: 1, col: 3, value: 6 }, { row: 0, col: 8, value: 9 }], cage: [{ row: 7, col: 0 }, { row: 8, col: 0 }] },
+  reflectMainDiagonal: { clues: [{ row: 2, col: 0, value: 4 }, { row: 4, col: 1, value: 7 }, { row: 1, col: 3, value: 8 }, { row: 6, col: 5, value: 2 }, { row: 3, col: 7, value: 6 }, { row: 8, col: 8, value: 9 }], cage: [{ row: 0, col: 0 }, { row: 0, col: 1 }] },
+  reflectAntiDiagonal: { clues: [{ row: 6, col: 8, value: 4 }, { row: 4, col: 7, value: 7 }, { row: 7, col: 5, value: 8 }, { row: 2, col: 3, value: 2 }, { row: 5, col: 1, value: 6 }, { row: 0, col: 0, value: 9 }], cage: [{ row: 8, col: 7 }, { row: 8, col: 8 }] },
 }
 
 describe('playable content identity', () => {
@@ -230,5 +279,113 @@ describe('playable content identity', () => {
     const second = (() => { try { canonicalizePlayableContent(invalid) } catch (error) { return String(error) } return '' })()
     expect(first).toBe(second)
     expect(first).toContain('content.clues[0].value')
+  })
+
+  it('transforms the independent asymmetric fixture with all eight D4 formulas', () => {
+    const original = independentFixture(asymmetricClues)
+    expectValid(original)
+    const originalSnapshot = structuredClone(original)
+
+    for (const transformation of Object.keys(expectedD4) as D4Transformation[]) {
+      const expected = expectedD4[transformation]
+      const transformed = transformPlayableContent(original, transformation)
+      const expectedContent = independentFixture(expected.clues, expected.cage)
+      expectValid(expectedContent)
+      expectValid(transformed)
+      expect(transformed.clues).toEqual(expected.clues)
+      const transformedMultiCell = transformed.cages.find((cage) => cage.cells.length === 2)
+      expect(transformedMultiCell?.sum).toBe(3)
+      expect(sortedCoordinates(transformedMultiCell?.cells ?? [])).toEqual(sortedCoordinates(expected.cage))
+      expect(arePlayableContentsD4Equivalent(original, transformed)).toBe(true)
+      expect(transformed).not.toBe(original)
+    }
+    expect(original).toEqual(originalSnapshot)
+  })
+
+  it('accepts a separately constructed symmetric content and preserves immutability', () => {
+    const symmetric: PlayableContent = {
+      size: 9,
+      clues: [],
+      cages: Array.from({ length: 9 }, (_, row) =>
+        Array.from({ length: 9 }, (_, col) => ({ cells: [{ row, col }], sum: 1 })),
+      ).flat(),
+    }
+    expectValid(symmetric)
+    const snapshot = structuredClone(symmetric)
+    for (const transformation of Object.keys(expectedD4) as D4Transformation[]) {
+      const transformed = transformPlayableContent(symmetric, transformation)
+      const independentlyConstructedExpected = {
+        size: 9 as const,
+        clues: [],
+        cages: Array.from({ length: 9 }, (_, row) =>
+          Array.from({ length: 9 }, (_, col) => ({ cells: [{ row, col }], sum: 1 })),
+        ).flat(),
+      }
+      expectValid(transformed)
+      expectValid(independentlyConstructedExpected)
+      expect(canonicalizePlayableContent(transformed)).toBe(canonicalizePlayableContent(independentlyConstructedExpected))
+      expect(arePlayableContentsD4Equivalent(symmetric, transformed)).toBe(true)
+    }
+    expect(symmetric).toEqual(snapshot)
+  })
+
+  it.each([
+    ['coordinate', independentFixture([{ row: 0, col: 3, value: 4 }, ...asymmetricClues.slice(1)])],
+    ['clue value', independentFixture([{ row: 0, col: 2, value: 5 }, ...asymmetricClues.slice(1)])],
+    ['cage sum', independentFixture(asymmetricClues, asymmetricCage, 4)],
+    ['cage membership', independentFixture(asymmetricClues, [{ row: 0, col: 0 }, { row: 0, col: 1 }])],
+  ])('rejects valid contents that differ in %s outside the D4 orbit', (_, changed) => {
+    const original = independentFixture(asymmetricClues)
+    expectValid(original)
+    expectValid(changed)
+    expect(arePlayableContentsD4Equivalent(original, changed)).toBe(false)
+  })
+
+  it('separates invalid inputs and invalid transformations from valid non-equivalence', () => {
+    const original = independentFixture(asymmetricClues)
+    expect(() => transformPlayableContent(original, 'unknown' as D4Transformation)).toThrow(ValidationError)
+    expect(() => transformPlayableContent(original, 'rotate45' as D4Transformation)).toThrow(ValidationError)
+    expect(() => arePlayableContentsD4Equivalent(original, { ...original, size: 8 } as unknown as PlayableContent)).toThrow(ValidationError)
+    expect(() => transformPlayableContent({ ...original, cages: [] }, 'identity')).toThrow(ValidationError)
+    expect(() => transformPlayableContent({ ...original, clues: [{ row: 9, col: 0, value: 4 }] }, 'identity')).toThrow(ValidationError)
+  })
+
+  it('rejects every non-D4 runtime identifier with a stable diagnostic without mutation', () => {
+    const invalidTransformations: unknown[] = [
+      Symbol('rotate45'),
+      Object.create(null),
+      { name: 'rotate45' },
+      () => 'rotate45',
+      null,
+      undefined,
+    ]
+
+    for (const transformation of invalidTransformations) {
+      const original = independentFixture(asymmetricClues)
+      const snapshot = structuredClone(original)
+      expect(() => transformPlayableContent(original, transformation as D4Transformation)).toThrow(ValidationError)
+      expect(() => transformPlayableContent(original, transformation as D4Transformation)).toThrow(
+        'transformation: unsupported D4 transformation',
+      )
+      expect(original).toEqual(snapshot)
+    }
+  })
+
+  it('exposes the versioned D4 contract and compares complete canonical strings', () => {
+    expect(D4_EQUIVALENCE_ALGORITHM_VERSION).toBe('d4-v1')
+    const original = independentFixture(asymmetricClues)
+    const sameOrbit = independentFixture(expectedD4.rotate90.clues, expectedD4.rotate90.cage)
+    const distinctOrbit: PlayableContent = {
+      size: 9,
+      clues: [],
+      cages: Array.from({ length: 9 }, (_, row) =>
+        Array.from({ length: 9 }, (_, col) => ({ cells: [{ row, col }], sum: 1 })),
+      ).flat(),
+    }
+    expectValid(original)
+    expectValid(sameOrbit)
+    expectValid(distinctOrbit)
+    expect(arePlayableContentsD4Equivalent(original, sameOrbit)).toBe(true)
+    expect(arePlayableContentsD4Equivalent(original, distinctOrbit)).toBe(false)
   })
 })

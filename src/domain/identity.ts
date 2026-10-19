@@ -192,6 +192,88 @@ export function canonicalizePlayableContent(content: PlayableContent): string {
   return JSON.stringify(normalizedContent(content))
 }
 
+export type D4Transformation =
+  | 'identity'
+  | 'rotate90'
+  | 'rotate180'
+  | 'rotate270'
+  | 'reflectVertical'
+  | 'reflectHorizontal'
+  | 'reflectMainDiagonal'
+  | 'reflectAntiDiagonal'
+
+export const D4_EQUIVALENCE_ALGORITHM_VERSION = 'd4-v1' as const
+
+const d4Transformations: readonly D4Transformation[] = [
+  'identity',
+  'rotate90',
+  'rotate180',
+  'rotate270',
+  'reflectVertical',
+  'reflectHorizontal',
+  'reflectMainDiagonal',
+  'reflectAntiDiagonal',
+]
+
+function assertD4Transformation(transformation: D4Transformation): void {
+  switch (transformation) {
+    case 'identity':
+    case 'rotate90':
+    case 'rotate180':
+    case 'rotate270':
+    case 'reflectVertical':
+    case 'reflectHorizontal':
+    case 'reflectMainDiagonal':
+    case 'reflectAntiDiagonal':
+      return
+    default:
+      throw new ValidationError('transformation: unsupported D4 transformation')
+  }
+}
+
+function transformCoordinate(cell: CellCoordinate, transformation: D4Transformation): CellCoordinate {
+  const n = gridSize - 1
+  switch (transformation) {
+    case 'identity': return { row: cell.row, col: cell.col }
+    case 'rotate90': return { row: cell.col, col: n - cell.row }
+    case 'rotate180': return { row: n - cell.row, col: n - cell.col }
+    case 'rotate270': return { row: n - cell.col, col: cell.row }
+    case 'reflectVertical': return { row: cell.row, col: n - cell.col }
+    case 'reflectHorizontal': return { row: n - cell.row, col: cell.col }
+    case 'reflectMainDiagonal': return { row: cell.col, col: cell.row }
+    case 'reflectAntiDiagonal': return { row: n - cell.col, col: n - cell.row }
+    default: {
+      const invalid = transformation as string
+      throw new ValidationError(`transformation: unsupported D4 transformation ${invalid}`)
+    }
+  }
+}
+
+export function transformPlayableContent(content: PlayableContent, transformation: D4Transformation): PlayableContent {
+  validateContent(content)
+  assertD4Transformation(transformation)
+  return {
+    size: 9,
+    clues: content.clues.map((clue) => {
+      const coordinate = transformCoordinate(clue, transformation)
+      return { row: coordinate.row, col: coordinate.col, value: clue.value }
+    }),
+    cages: content.cages.map((cage) => ({
+      sum: cage.sum,
+      cells: cage.cells.map((cell) => transformCoordinate(cell, transformation)),
+    })),
+  }
+}
+
+export function arePlayableContentsD4Equivalent(left: PlayableContent, right: PlayableContent): boolean {
+  validateContent(left)
+  validateContent(right)
+  const canonicalRight = canonicalizePlayableContent(right)
+  return d4Transformations.some((transformation) => (
+    canonicalizePlayableContent(transformPlayableContent(left, transformation)) === canonicalRight
+  ))
+}
+
 export function fingerprintPlayableContent(content: PlayableContent): string {
   const canonical = canonicalizePlayableContent(content)
   return `sha256-${bytesToHex(sha256(new TextEncoder().encode(canonical)))}`
