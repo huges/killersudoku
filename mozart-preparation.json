@@ -21,6 +21,7 @@
     "docs/M0-3-modello.md",
     "docs/M2-1-pipeline-catalogo.md",
     "docs/M2-4A-contenuto-fingerprint.md",
+    "docs/M2-4B-equivalenza-d4.md",
     "eslint.config.js",
     "index.html",
     "mozart-software.json",
