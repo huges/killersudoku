@@ -39,6 +39,7 @@
     "src/domain/game.ts",
     "src/domain/identity.ts",
     "src/domain/persistence.ts",
+    "src/domain/registry.ts",
     "src/domain/searchHelpers.ts",
     "src/domain/serialization.ts",
     "src/domain/solver.ts",
