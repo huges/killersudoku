@@ -32,7 +32,7 @@ describe('incremental historical registry', () => {
     expect(updated.registry?.identities).toHaveLength(1)
     const conflict = assignIncremental(registry, [input(key('feed', 'three'), fp('d'), { publicId: 'puzzle-000001' })], {})
     expect(conflict.registry).toBeNull()
-    expect(conflict.diagnostics[0].code).toBe('fingerprint-conflict')
+    expect(conflict.diagnostics[0].code).toBe('public-id-conflict')
   })
 
   it('reports ambiguous-identity when known fingerprint and known alias belong to different identities', () => {
@@ -118,7 +118,7 @@ describe('incremental historical registry', () => {
 
     const publicConflict = assignIncremental(registry, [input(key('feed', 'other'), fp('d'), { publicId: registry.identities[0].publicId })], {})
     expect(publicConflict.registry).toBeNull()
-    expect(publicConflict.diagnostics[0].code).toBe('fingerprint-conflict')
+    expect(publicConflict.diagnostics[0].code).toBe('public-id-conflict')
   })
 
   it('rejects incompatible states and preserves reserved IDs and aliases', () => {
@@ -199,7 +199,7 @@ describe('incremental historical registry', () => {
     const conflict = assignIncremental(registry, [input(key('feed', 'conflicting-id'), fp('7'), { publicId: registry.identities[0].publicId })], {})
     expect(conflict.registry).toBeNull()
     expect(conflict.observations).toEqual([])
-    expect(conflict.diagnostics[0].code).toBe('fingerprint-conflict')
+    expect(conflict.diagnostics[0].code).toBe('public-id-conflict')
   })
 
   it('distinguishes case-sensitive aliases and rejects runtime option and registry properties', () => {
@@ -271,14 +271,14 @@ describe('incremental historical registry', () => {
     expect(second.registry!.associations.every((association) => association.fingerprint !== null)).toBe(true)
   })
 
-  it('rejects a known public ID paired with incompatible historical evidence', () => {
+  it('returns public-id-conflict for a historical public ID with incompatible fingerprint evidence', () => {
     const first = assignIncremental(init(), [input(key('feed', 'first'), fp('c'))], { initialization: true })
     const second = assignIncremental(first.registry as Registry, [input(key('feed', 'second'), fp('d'))], {})
     const registry = second.registry as Registry
     const result = assignIncremental(registry, [input(key('feed', 'new'), fp('e'), { publicId: registry.identities[0].publicId })], {})
     expect(result.registry).toBeNull()
     expect(result.observations).toEqual([])
-    expect(result.diagnostics[0].code).toBe('fingerprint-conflict')
+    expect(result.diagnostics[0].code).toBe('public-id-conflict')
   })
 
   it('returns public-id-conflict before identity-conflict for known fingerprint and another historical ID', () => {
@@ -308,6 +308,26 @@ describe('incremental historical registry', () => {
 
     const reversed = assignIncremental(init(), [malformedFingerprint, malformedAlias], { initialization: true })
     expect(reversed.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-fingerprint', 'malformed-alias-list'])
+  })
+
+  it('rejects duplicate registry reservations, association observations, and cross-namespace reserved collisions', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'valid'), fp('a'), { aliases: ['valid-alias'] })], { initialization: true })
+    const registry = base.registry as Registry
+
+    const duplicateReservation = { ...registry, reservedIds: ['reserved-id', 'reserved-id'] }
+    const reservationResult = assignIncremental(duplicateReservation, [], {})
+    expect(reservationResult.registry).toBeNull()
+    expect(reservationResult.diagnostics.some((diagnostic) => diagnostic.code === 'id-conflict')).toBe(true)
+
+    const duplicateAssociation = { ...registry, associations: [...registry.associations, { ...registry.associations[0] }] }
+    const associationResult = assignIncremental(duplicateAssociation, [], {})
+    expect(associationResult.registry).toBeNull()
+    expect(associationResult.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+
+    const reservedAliasAsId = { ...registry, reservedIds: ['valid-alias'] }
+    const collisionResult = assignIncremental(reservedAliasAsId, [], {})
+    expect(collisionResult.registry).toBeNull()
+    expect(collisionResult.diagnostics.some((diagnostic) => diagnostic.code === 'id-conflict')).toBe(true)
   })
 })
 

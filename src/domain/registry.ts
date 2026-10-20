@@ -52,33 +52,79 @@ function validateRegistry(value: unknown): Diagnostic[] {
   if (r.schemaVersion !== '1' || r.namespace !== REGISTRY_NAMESPACE) errors.push(diagnostic('invalid-structure', 'previousRegistry', 'unsupported registry schema or namespace'))
   if (!Array.isArray(r.identities) || !Array.isArray(r.associations) || !Array.isArray(r.reservedIds) || !Array.isArray(r.reservedAliases)) return errors.concat(diagnostic('invalid-structure', 'previousRegistry', 'registry arrays are required'))
   const ids = new Map<string, IdentityHistory>(); const fps = new Map<string, string>(); const aliases = new Map<string, string>(); const records = new Map<string, string>()
-  for (const id of r.reservedIds) if (!validId(id)) errors.push(diagnostic('invalid-id', 'previousRegistry.reservedIds', 'reserved ID is invalid'))
-  for (const alias of r.reservedAliases) if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', 'previousRegistry.reservedAliases', 'reserved alias is invalid'))
+  const reservedIdValues = new Set<string>()
+  for (const id of r.reservedIds) {
+    if (!validId(id)) errors.push(diagnostic('invalid-id', 'previousRegistry.reservedIds', 'reserved ID is invalid'))
+    if (reservedIdValues.has(id)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID is duplicated'))
+    reservedIdValues.add(id)
+  }
+  const reservedAliasValues = new Set<string>()
+  for (const alias of r.reservedAliases) {
+    if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', 'previousRegistry.reservedAliases', 'reserved alias is invalid'))
+    if (reservedAliasValues.has(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias is duplicated'))
+    reservedAliasValues.add(alias)
+  }
   for (const identity of r.identities) {
     if (!exact(identity, ['publicId', 'firstAssignment', 'fingerprints', 'aliases', 'stateHistory', 'currentState', 'currentStateObservation']) || !validId(identity.publicId) || !exact(identity.firstAssignment, ['recordKey', 'observationKey']) || !validRecordKey(identity.firstAssignment.recordKey) || typeof identity.firstAssignment.observationKey !== 'string' || !Array.isArray(identity.fingerprints) || !Array.isArray(identity.aliases) || !Array.isArray(identity.stateHistory) || (identity.currentState !== 'current' && identity.currentState !== 'removed') || typeof identity.currentStateObservation !== 'string') { errors.push(diagnostic('invalid-structure', 'previousRegistry.identities', 'identity history is invalid')); continue }
     if (ids.has(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.identities', 'publicId belongs to multiple identities'))
     ids.set(identity.publicId, identity)
-    for (const fp of identity.fingerprints) { if (!validFingerprint(fp)) errors.push(diagnostic('invalid-fingerprint', 'previousRegistry.identities', 'historical fingerprint is invalid')); else { const old = fps.get(fpKey(fp)); if (old && old !== identity.publicId) errors.push(diagnostic('fingerprint-conflict', 'previousRegistry.identities', 'fingerprint belongs to multiple identities')); fps.set(fpKey(fp), identity.publicId) } }
-    for (const alias of identity.aliases) { if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', 'previousRegistry.identities', 'historical alias is invalid')); else { const old = aliases.get(alias); if (old && old !== identity.publicId) errors.push(diagnostic('ambiguous-identity', 'previousRegistry.identities', 'alias belongs to multiple identities')); aliases.set(alias, identity.publicId) } }
+    const identityFingerprints = new Set<string>()
+    for (const fp of identity.fingerprints) { if (!validFingerprint(fp)) errors.push(diagnostic('invalid-fingerprint', 'previousRegistry.identities', 'historical fingerprint is invalid')); else { const key = fpKey(fp); if (identityFingerprints.has(key)) errors.push(diagnostic('fingerprint-conflict', 'previousRegistry.identities', 'historical fingerprint is duplicated')); identityFingerprints.add(key); const old = fps.get(key); if (old && old !== identity.publicId) errors.push(diagnostic('fingerprint-conflict', 'previousRegistry.identities', 'fingerprint belongs to multiple identities')); fps.set(key, identity.publicId) } }
+    const identityAliases = new Set<string>()
+    for (const alias of identity.aliases) { if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', 'previousRegistry.identities', 'historical alias is invalid')); else { if (identityAliases.has(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.identities', 'historical alias is duplicated')); identityAliases.add(alias); const old = aliases.get(alias); if (old && old !== identity.publicId) errors.push(diagnostic('ambiguous-identity', 'previousRegistry.identities', 'alias belongs to multiple identities')); aliases.set(alias, identity.publicId) } }
     for (const state of identity.stateHistory) if (!exact(state, ['state', 'observationKey']) || (state.state !== 'current' && state.state !== 'removed') || typeof state.observationKey !== 'string') errors.push(diagnostic('invalid-structure', 'previousRegistry.identities', 'state history is invalid'))
   }
+  const associationObservationKeys = new Set<string>()
   for (const association of r.associations) {
     if (!exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey']) || !validRecordKey(association.recordKey) || !validId(association.publicId) || (association.observedPublicId !== null && !validId(association.observedPublicId)) || (association.fingerprint !== null && !validFingerprint(association.fingerprint)) || !Array.isArray(association.aliases) || association.aliases.some((a) => !validAlias(a)) || (association.state !== 'current' && association.state !== 'removed') || typeof association.observationKey !== 'string') { errors.push(diagnostic('invalid-structure', 'previousRegistry.associations', 'association is invalid')); continue }
+    if (associationObservationKeys.has(association.observationKey)) errors.push(diagnostic('invalid-structure', 'previousRegistry.associations', 'association observation is duplicated', [association.recordKey]))
+    associationObservationKeys.add(association.observationKey)
+    if (new Set(association.aliases).size !== association.aliases.length) errors.push(diagnostic('alias-conflict', 'previousRegistry.associations', 'association aliases are duplicated', [association.recordKey]))
     if (!ids.has(association.publicId)) errors.push(diagnostic('invalid-structure', 'previousRegistry.associations', 'association references an unknown identity', [association.recordKey]))
     const key = recordText(association.recordKey); const old = records.get(key); if (old && old !== association.publicId) errors.push(diagnostic('identity-conflict', 'previousRegistry.associations', 'recordKey is assigned to different identities', [association.recordKey])); records.set(key, association.publicId)
   }
   const reservedIds = new Set(r.reservedIds); const reservedAliases = new Set(r.reservedAliases)
-  for (const identity of r.identities) { if (reservedIds.has(identity.publicId) && !r.reservedIds.includes(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID conflict')); for (const alias of identity.aliases) if (reservedAliases.has(alias) && !r.reservedAliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias conflict')) }
+  const associationByObservation = new Map<string, Association>()
+  for (const association of r.associations) associationByObservation.set(association.observationKey, association)
+  const stateHistoryByObservation = new Map<string, string>()
+  for (const identity of r.identities) {
+    for (const state of identity.stateHistory) {
+      const priorOwner = stateHistoryByObservation.get(state.observationKey)
+      if (priorOwner && priorOwner !== identity.publicId) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state observation is duplicated across identities'))
+      stateHistoryByObservation.set(state.observationKey, identity.publicId)
+    }
+  }
+  for (const identity of r.identities) {
+    if (reservedIds.has(identity.publicId) && !r.reservedIds.includes(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID conflict'))
+    for (const alias of identity.aliases) if (reservedAliases.has(alias) && !r.reservedAliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias conflict'))
+    const currentAssociation = associationByObservation.get(identity.currentStateObservation)
+    if (!currentAssociation || currentAssociation.publicId !== identity.publicId || currentAssociation.state !== identity.currentState) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.currentStateObservation', 'current state observation does not match the identity'))
+    for (const state of identity.stateHistory) {
+      const association = associationByObservation.get(state.observationKey)
+      if (!association || association.publicId !== identity.publicId || association.state !== state.state) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state history does not match an association'))
+    }
+  }
+  for (const association of r.associations) {
+    const identity = ids.get(association.publicId)
+    if (!identity) continue
+    for (const alias of association.aliases) if (!identity.aliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.associations', 'association alias is absent from identity history', [association.recordKey]))
+    if (association.fingerprint && !identity.fingerprints.some((fingerprint) => sameFp(fingerprint, association.fingerprint!))) errors.push(diagnostic('fingerprint-conflict', 'previousRegistry.associations', 'association fingerprint is absent from identity history', [association.recordKey]))
+  }
   return errors
 }
 
 function validateRegistryGlobal(r: Registry): Diagnostic[] {
   const errors: Diagnostic[] = []
   const idOwners = new Map<string, string>()
+  const identityById = new Map<string, IdentityHistory>()
   const aliasOwners = new Map<string, string>()
   const fpOwners = new Map<string, string>()
   const recordOwners = new Map<string, string>()
+  const associationObservations = new Set<string>()
+  const stateObservations = new Map<string, string>()
   const reservedIds = new Set(r.reservedIds)
+  const identityIds = new Set<string>()
+  const identityStateOwners = new Map<string, string>()
   const reservedAliases = new Set(r.reservedAliases)
   for (const identity of r.identities) {
     const priorId = idOwners.get(identity.publicId)
@@ -99,8 +145,18 @@ function validateRegistryGlobal(r: Registry): Diagnostic[] {
     const historyKeys = new Set<string>()
     for (const state of identity.stateHistory) {
       if (historyKeys.has(state.observationKey)) errors.push(diagnostic('invalid-structure', 'registry.identities.stateHistory', 'state observation is duplicated'))
+      if (stateObservations.has(state.observationKey)) errors.push(diagnostic('invalid-structure', 'registry.identities.stateHistory', 'state observation is duplicated across identities'))
       historyKeys.add(state.observationKey)
+      stateObservations.set(state.observationKey, identity.publicId)
     }
+  }
+  for (const [value, idOwner] of idOwners) {
+    const aliasOwner = aliasOwners.get(value)
+    if (aliasOwner && aliasOwner !== idOwner) errors.push(diagnostic('id-conflict', 'registry.identities', 'an ID collides with an alias owned by another identity'))
+  }
+  for (const [value, aliasOwner] of aliasOwners) {
+    const idOwner = idOwners.get(value)
+    if (idOwner && idOwner !== aliasOwner) errors.push(diagnostic('alias-conflict', 'registry.identities', 'an alias collides with an ID owned by another identity'))
   }
   for (const association of r.associations) {
     const key = recordText(association.recordKey)
@@ -191,7 +247,15 @@ export function assignIncremental(previousRegistry: Registry, input: readonly As
     const candidateIds = new Set(group.flatMap((record) => [...historicalCandidates(record)])); const existingKeys = new Set(group.map((record) => recordOwners.get(recordText(record.input.recordKey))).filter((x): x is string => Boolean(x))); for (const id of existingKeys) candidateIds.add(id)
     const requestedHistoricalIds = new Set(group.map((record) => record.input.publicId).filter((id): id is string => Boolean(id && idOwners.has(id))))
     const evidenceIds = new Set([...candidateIds].filter((id) => !requestedHistoricalIds.has(id)))
-    if (requestedHistoricalIds.size > 0 && evidenceIds.size > 0 && [...requestedHistoricalIds].some((id) => !evidenceIds.has(id))) return failure([diagnostic('public-id-conflict', 'input.publicId', 'publicId is incompatible with historical evidence', group.map((r) => r.input.recordKey))])
+    const requestedEvidenceConflicts = [...requestedHistoricalIds].some((requestedId) => group.some((record) => {
+      const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null)
+      if (!fp) return false
+      const owner = fpOwners.get(fpKey(fp))
+      if (owner && owner.publicId !== requestedId) return true
+      const requestedIdentity = idOwners.get(requestedId)!
+      return requestedIdentity.fingerprints.some((historical) => historical.contract === fp.contract && historical.value !== fp.value)
+    }))
+    if (requestedHistoricalIds.size > 0 && (evidenceIds.size > 0 || requestedEvidenceConflicts)) return failure([diagnostic('public-id-conflict', 'input.publicId', 'publicId is incompatible with historical evidence', group.map((r) => r.input.recordKey))])
     if (candidateIds.size > 1) return failure([diagnostic('identity-conflict', 'input', 'batch references incompatible identities', group.map((r) => r.input.recordKey))])
     const identityId = candidateIds.values().next().value as string | undefined; const identity = identityId ? idOwners.get(identityId) : undefined
     if (identityId && !identity) return failure([diagnostic('invalid-structure', 'input', 'candidate identity is unavailable', group.map((r) => r.input.recordKey))])
