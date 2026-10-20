@@ -310,6 +310,46 @@ describe('incremental historical registry', () => {
     expect(reversed.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-fingerprint', 'malformed-alias-list'])
   })
 
+  it('rejects a first assignment that does not belong to its identity', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'first-assignment'), fp('a'))], { initialization: true })
+    const registry = base.registry as Registry
+    const malformed = {
+      ...registry,
+      identities: registry.identities.map((identity) => ({
+        ...identity,
+        firstAssignment: { ...identity.firstAssignment, observationKey: 'not-an-association' },
+      })),
+    }
+    const result = assignIncremental(malformed, [], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics.some((diagnostic) => diagnostic.path === 'previousRegistry.identities.firstAssignment' && diagnostic.code === 'invalid-structure')).toBe(true)
+  })
+
+  it('rejects an association without matching state history for its identity', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'missing-history'), fp('b'))], { initialization: true })
+    const registry = base.registry as Registry
+    const malformed = {
+      ...registry,
+      identities: registry.identities.map((identity) => ({ ...identity, stateHistory: [] })),
+    }
+    const result = assignIncremental(malformed, [], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics.some((diagnostic) => diagnostic.path === 'previousRegistry.associations' && diagnostic.code === 'invalid-structure')).toBe(true)
+  })
+
+  it('rejects duplicate identity IDs instead of comparing an owner to itself', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'duplicate-id'), fp('c'))], { initialization: true })
+    const registry = base.registry as Registry
+    const duplicateIdentity = { ...registry.identities[0], firstAssignment: { ...registry.identities[0].firstAssignment, recordKey: key('feed', 'other') } }
+    const malformed = { ...registry, identities: [...registry.identities, duplicateIdentity] }
+    const result = assignIncremental(malformed, [], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'id-conflict')).toBe(true)
+  })
+
   it('rejects duplicate registry reservations, association observations, and cross-namespace reserved collisions', () => {
     const base = assignIncremental(init(), [input(key('feed', 'valid'), fp('a'), { aliases: ['valid-alias'] })], { initialization: true })
     const registry = base.registry as Registry

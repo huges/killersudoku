@@ -97,6 +97,8 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (const identity of r.identities) {
     if (reservedIds.has(identity.publicId) && !r.reservedIds.includes(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID conflict'))
     for (const alias of identity.aliases) if (reservedAliases.has(alias) && !r.reservedAliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias conflict'))
+    const firstAssociation = associationByObservation.get(identity.firstAssignment.observationKey)
+    if (!firstAssociation || firstAssociation.publicId !== identity.publicId || recordText(firstAssociation.recordKey) !== recordText(identity.firstAssignment.recordKey)) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.firstAssignment', 'first assignment does not match an association'))
     const currentAssociation = associationByObservation.get(identity.currentStateObservation)
     if (!currentAssociation || currentAssociation.publicId !== identity.publicId || currentAssociation.state !== identity.currentState) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.currentStateObservation', 'current state observation does not match the identity'))
     for (const state of identity.stateHistory) {
@@ -107,6 +109,7 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (const association of r.associations) {
     const identity = ids.get(association.publicId)
     if (!identity) continue
+    if (!identity.stateHistory.some((state) => state.observationKey === association.observationKey && state.state === association.state)) errors.push(diagnostic('invalid-structure', 'previousRegistry.associations', 'association has no matching state history entry', [association.recordKey]))
     for (const alias of association.aliases) if (!identity.aliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.associations', 'association alias is absent from identity history', [association.recordKey]))
     if (association.fingerprint && !identity.fingerprints.some((fingerprint) => sameFp(fingerprint, association.fingerprint!))) errors.push(diagnostic('fingerprint-conflict', 'previousRegistry.associations', 'association fingerprint is absent from identity history', [association.recordKey]))
   }
@@ -116,19 +119,14 @@ function validateRegistry(value: unknown): Diagnostic[] {
 function validateRegistryGlobal(r: Registry): Diagnostic[] {
   const errors: Diagnostic[] = []
   const idOwners = new Map<string, string>()
-  const identityById = new Map<string, IdentityHistory>()
   const aliasOwners = new Map<string, string>()
   const fpOwners = new Map<string, string>()
   const recordOwners = new Map<string, string>()
   const associationObservations = new Set<string>()
   const stateObservations = new Map<string, string>()
   const reservedIds = new Set(r.reservedIds)
-  const identityIds = new Set<string>()
-  const identityStateOwners = new Map<string, string>()
   const reservedAliases = new Set(r.reservedAliases)
   for (const identity of r.identities) {
-    const priorId = idOwners.get(identity.publicId)
-    if (priorId && priorId !== identity.publicId) errors.push(diagnostic('id-conflict', 'registry.identities', 'publicId is assigned more than once'))
     idOwners.set(identity.publicId, identity.publicId)
     for (const alias of identity.aliases) {
       const priorAlias = aliasOwners.get(alias)
