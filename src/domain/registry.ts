@@ -122,7 +122,6 @@ function validateRegistryGlobal(r: Registry): Diagnostic[] {
   const aliasOwners = new Map<string, string>()
   const fpOwners = new Map<string, string>()
   const recordOwners = new Map<string, string>()
-  const associationObservations = new Set<string>()
   const stateObservations = new Map<string, string>()
   const reservedIds = new Set(r.reservedIds)
   const reservedAliases = new Set(r.reservedAliases)
