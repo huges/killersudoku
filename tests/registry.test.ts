@@ -3,12 +3,13 @@ import {
   assignIncremental,
   createEmptyRegistry,
   type AssignmentInput,
+  type FingerprintRef,
   type Registry,
 } from '../src/domain/registry'
 
 const fp = (hex: string) => ({ contract: 'legacy-sha256' as const, kind: 'legacy' as const, value: `sha256-${hex.repeat(64).slice(0, 64)}` })
 const key = (source: string, value: string) => ({ source, key: value })
-const input = (recordKey: ReturnType<typeof key>, fingerprint = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => ({ recordKey, fingerprint, aliases: [], state: 'current', ...extra })
+const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => ({ recordKey, ...(fingerprint === undefined ? {} : { fingerprint }), aliases: [], state: 'current', ...extra })
 const init = (): Registry => createEmptyRegistry()
 
 describe('incremental historical registry', () => {
@@ -32,6 +33,17 @@ describe('incremental historical registry', () => {
     const conflict = assignIncremental(registry, [input(key('feed', 'three'), fp('d'), { publicId: 'puzzle-000001' })], {})
     expect(conflict.registry).toBeNull()
     expect(conflict.diagnostics[0].code).toBe('fingerprint-conflict')
+  })
+
+  it('reports ambiguous-identity when known fingerprint and known alias belong to different identities', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'fingerprint-owner'), fp('1'))], { initialization: true })
+    const second = assignIncremental(first.registry as Registry, [input(key('feed', 'alias-owner'), fp('2'), { aliases: ['other-owner'] })], {})
+    expect(second.diagnostics).toEqual([])
+    const result = assignIncremental(second.registry as Registry, [input(key('feed', 'contradictory'), fp('1'), { aliases: ['other-owner'] })], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics).toHaveLength(1)
+    expect(result.diagnostics[0].code).toBe('ambiguous-identity')
   })
 
   it('chooses the minimum observation key for a compatible batch state', () => {
@@ -91,6 +103,182 @@ describe('incremental historical registry', () => {
     const left = assignIncremental(init(), values, { initialization: true })
     const right = assignIncremental(init(), [...values].reverse(), { initialization: true })
     expect(JSON.stringify(left)).toBe(JSON.stringify(right))
+  })
+
+  it('covers evidence and public-id diagnostics without partial results', () => {
+    const aliasOnly = assignIncremental(init(), [input(key('feed', 'alias-only'), undefined, { aliases: ['unknown'] })], { initialization: true })
+    expect(aliasOnly.registry).toBeNull()
+    expect(aliasOnly.diagnostics[0].code).toBe('insufficient-identity-evidence')
+
+    const first = assignIncremental(init(), [input(key('feed', 'owner'), fp('c'), { aliases: ['known'] })], { initialization: true })
+    const registry = first.registry as Registry
+    const unknownFingerprint = assignIncremental(registry, [input(key('feed', 'new'), fp('d'), { aliases: ['known'] })], {})
+    expect(unknownFingerprint.registry).toBeNull()
+    expect(unknownFingerprint.diagnostics[0].code).toBe('fingerprint-alias-conflict')
+
+    const publicConflict = assignIncremental(registry, [input(key('feed', 'other'), fp('d'), { publicId: registry.identities[0].publicId })], {})
+    expect(publicConflict.registry).toBeNull()
+    expect(publicConflict.diagnostics[0].code).toBe('fingerprint-conflict')
+  })
+
+  it('rejects incompatible states and preserves reserved IDs and aliases', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'one'), fp('e'), { publicId: 'fixture-partial', aliases: ['reserved-alias'] })], { initialization: true })
+    const registry = first.registry as Registry
+    registry.reservedIds.push('puzzle-000002')
+    registry.reservedAliases.push('reserved-alias')
+    const conflictingState = assignIncremental(registry, [
+      input(key('feed', 'two'), fp('e'), { state: 'current' }),
+      input(key('feed', 'three'), fp('e'), { state: 'removed' }),
+    ], {})
+    expect(conflictingState.registry).toBeNull()
+    expect(conflictingState.diagnostics[0].code).toBe('incompatible-state')
+
+    const next = assignIncremental(registry, [input(key('feed', 'new'), fp('f'))], {})
+    expect(next.diagnostics).toEqual([])
+    expect(next.registry?.identities.some((identity) => identity.publicId === 'puzzle-000003')).toBe(true)
+    expect(next.registry?.reservedAliases).toContain('reserved-alias')
+  })
+
+  it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
+    const invalidFingerprint = assignIncremental(init(), [input(key('feed', 'bad'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('a').value } as never)], { initialization: true })
+    expect(invalidFingerprint.registry).toBeNull()
+    expect(invalidFingerprint.observations).toEqual([])
+    expect(invalidFingerprint.diagnostics[0].code).toBe('invalid-fingerprint')
+
+    const malformedRegistry = assignIncremental({ identities: null } as never, [], { initialization: true })
+    expect(malformedRegistry.registry).toBeNull()
+    expect(malformedRegistry.diagnostics[0].code).toBe('invalid-structure')
+
+    const malformedInput = assignIncremental(init(), [{ recordKey: key('feed', 'nested'), aliases: null, state: 'current' } as never], { initialization: true })
+    expect(malformedInput.registry).toBeNull()
+    expect(malformedInput.diagnostics[0].code).toBe('invalid-alias')
+  })
+
+  it('covers explicit new IDs, public-id-only evidence, and contract separation', () => {
+    const adopted = assignIncremental(init(), [input(key('feed', 'adopted'), fp('1'), { publicId: 'catalog-custom-7' })], { initialization: true })
+    expect(adopted.diagnostics).toEqual([])
+    expect(adopted.registry?.identities[0].publicId).toBe('catalog-custom-7')
+
+    const publicOnly = assignIncremental(init(), [input(key('feed', 'public-only'), undefined, { publicId: 'catalog-custom-8' })], { initialization: true })
+    expect(publicOnly.registry).toBeNull()
+    expect(publicOnly.diagnostics[0].code).toBe('insufficient-identity-evidence')
+
+    const current = input(key('feed', 'current'), { contract: 'playable-content-v1', kind: 'current', value: fp('2').value } as never)
+    const legacy = input(key('feed', 'legacy'), fp('2'))
+    const result = assignIncremental(init(), [current, legacy], { initialization: true })
+    expect(result.diagnostics).toEqual([])
+    expect(result.registry?.identities).toHaveLength(2)
+  })
+
+  it('honors global reservations and reports exhaustion without partial output', () => {
+    const reserved = assignIncremental(init(), [input(key('feed', 'first'), fp('3'))], { initialization: true })
+    const registry = reserved.registry as Registry
+    registry.reservedIds.push('puzzle-000002')
+    const next = assignIncremental(registry, [input(key('feed', 'second'), fp('4'))], {})
+    expect(next.diagnostics).toEqual([])
+    expect(next.registry?.identities.some((identity) => identity.publicId === 'puzzle-000003')).toBe(true)
+
+    const exhausted: Registry = { ...init(), reservedIds: Array.from({ length: 999999 }, (_, index) => `puzzle-${String(index + 1).padStart(6, '0')}`) }
+    const result = assignIncremental(exhausted, [input(key('feed', 'exhausted'), fp('5'))], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics[0].code).toBe('id-exhausted')
+  })
+
+  it('covers alias-only updates, unknown public IDs, and explicit public-id conflicts', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'owner'), fp('6'), { aliases: ['KnownAlias'] })], { initialization: true })
+    const registry = first.registry as Registry
+    const aliasUpdate = assignIncremental(registry, [input(key('feed', 'alias-update'), undefined, { aliases: ['KnownAlias'] })], {})
+    expect(aliasUpdate.diagnostics).toEqual([])
+    expect(aliasUpdate.registry?.identities).toHaveLength(1)
+
+    const unknownId = assignIncremental(registry, [input(key('feed', 'unknown-id'), fp('7'), { publicId: 'catalog-new-7' })], {})
+    expect(unknownId.diagnostics).toEqual([])
+    expect(unknownId.registry?.identities.some((identity) => identity.publicId === 'catalog-new-7')).toBe(true)
+
+    const conflict = assignIncremental(registry, [input(key('feed', 'conflicting-id'), fp('7'), { publicId: registry.identities[0].publicId })], {})
+    expect(conflict.registry).toBeNull()
+    expect(conflict.observations).toEqual([])
+    expect(conflict.diagnostics[0].code).toBe('fingerprint-conflict')
+  })
+
+  it('distinguishes case-sensitive aliases and rejects runtime option and registry properties', () => {
+    const caseSensitive = assignIncremental(init(), [input(key('feed', 'case'), fp('8'), { aliases: ['Alias'] })], { initialization: true })
+    expect(caseSensitive.diagnostics).toEqual([])
+    const unknownCase = assignIncremental(caseSensitive.registry as Registry, [input(key('feed', 'other'), undefined, { aliases: ['alias'] })], {})
+    expect(unknownCase.registry).toBeNull()
+    expect(unknownCase.diagnostics[0].code).toBe('insufficient-identity-evidence')
+
+    const badOptions = assignIncremental(init(), [input(key('feed', 'bad-options'), fp('9'))], { initialization: true, extra: true } as never)
+    expect(badOptions.registry).toBeNull()
+    expect(badOptions.diagnostics[0].code).toBe('invalid-structure')
+
+    const badRegistry = assignIncremental({ ...init(), identities: [{ ...init().identities, unexpected: true }] } as never, [], { initialization: true })
+    expect(badRegistry.registry).toBeNull()
+    expect(badRegistry.diagnostics[0].code).toBe('invalid-structure')
+  })
+
+  it('reports duplicate record keys and identity conflicts atomically', () => {
+    const duplicate = assignIncremental(init(), [
+      input(key('feed', 'same'), fp('a')),
+      input(key('feed', 'same'), fp('b')),
+    ], { initialization: true })
+    expect(duplicate.registry).toBeNull()
+    expect(duplicate.observations).toEqual([])
+    expect(duplicate.diagnostics[0].code).toBe('duplicate-record-key')
+
+    const first = assignIncremental(init(), [input(key('feed', 'owner-a'), fp('c'))], { initialization: true })
+    const second = assignIncremental(first.registry as Registry, [input(key('feed', 'owner-b'), fp('d'))], {})
+    const conflict = assignIncremental(second.registry as Registry, [
+      input(key('feed', 'contradiction'), fp('c'), { aliases: ['missing'] }),
+    ], {})
+    expect(conflict.registry).toBeNull()
+    expect(conflict.observations).toEqual([])
+    expect(conflict.diagnostics[0].code).toBe('insufficient-identity-evidence')
+  })
+
+  it('rejects divergent content and preserves input objects on failure', () => {
+    const content = { size: 1, clues: [{ row: 0, column: 0, value: 1 }], cages: [] } as never
+    const observed = input(key('feed', 'content'), fp('a'), { content })
+    const before = JSON.stringify(observed)
+    const result = assignIncremental(init(), [observed], { initialization: true })
+    expect(result.registry).toBeNull()
+    expect(result.diagnostics[0].code).toBe('fingerprint-conflict')
+    expect(JSON.stringify(observed)).toBe(before)
+  })
+
+  it('distinguishes identity conflicts from ambiguous historical references', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'first'), fp('a'))], { initialization: true })
+    const second = assignIncremental(first.registry as Registry, [input(key('feed', 'second'), fp('b'))], {})
+    const registry = second.registry as Registry
+    const result = assignIncremental(registry, [
+      input(key('feed', 'first'), fp('b')),
+    ], {})
+    expect(result.registry).toBeNull()
+    expect(result.diagnostics[0].code).toBe('identity-conflict')
+  })
+
+  it('keeps cumulative fingerprints, aliases, states, and null optional observations', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'one'), fp('a'), { aliases: ['first'] })], { initialization: true })
+    const registry = first.registry as Registry
+    const second = assignIncremental(registry, [input(key('feed', 'two'), fp('b'), { aliases: ['second'], state: 'removed' })], {})
+    expect(second.diagnostics).toEqual([])
+    const identity = second.registry!.identities[0]
+    expect(identity.fingerprints.map((value) => value.value)).toEqual(expect.arrayContaining([fp('a').value, fp('b').value]))
+    expect(identity.aliases).toEqual(expect.arrayContaining(['first', 'second']))
+    expect(identity.stateHistory.map((value) => value.state)).toEqual(expect.arrayContaining(['current', 'removed']))
+    expect(second.registry!.associations.every((association) => association.observedPublicId === null)).toBe(true)
+    expect(second.registry!.associations.every((association) => association.fingerprint !== null)).toBe(true)
+  })
+
+  it('rejects a known public ID paired with incompatible historical evidence', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'first'), fp('c'))], { initialization: true })
+    const second = assignIncremental(first.registry as Registry, [input(key('feed', 'second'), fp('d'))], {})
+    const registry = second.registry as Registry
+    const result = assignIncremental(registry, [input(key('feed', 'new'), fp('e'), { publicId: registry.identities[0].publicId })], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics[0].code).toBe('fingerprint-conflict')
   })
 })
 

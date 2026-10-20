@@ -182,10 +182,14 @@ export function assignIncremental(previousRegistry: Registry, input: readonly As
     }
   }
   for (const group of [...groups.values()].sort((a, b) => a.map((r) => r.observationKey).sort()[0].localeCompare(b.map((r) => r.observationKey).sort()[0]))) {
-    const candidateIds = new Set(group.flatMap((record) => [...historicalCandidates(record)])); const existingKeys = new Set(group.map((record) => recordOwners.get(recordText(record.input.recordKey))).filter((x): x is string => Boolean(x))); for (const id of existingKeys) candidateIds.add(id)
     const knownAliasOwners = new Set(group.flatMap((record) => record.input.aliases.map((alias) => aliasOwners.get(alias)?.publicId).filter((id): id is string => Boolean(id))))
     const knownFingerprintOwners = new Set(group.flatMap((record) => { const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null); const owner = fp ? fpOwners.get(fpKey(fp))?.publicId : undefined; return owner ? [owner] : [] }))
-    if (knownAliasOwners.size > 1 || knownFingerprintOwners.size > 1) return failure([diagnostic('ambiguous-identity', 'input', 'references identify different historical identities', group.map((r) => r.input.recordKey))])
+    const historicalOwners = new Set([...knownAliasOwners, ...knownFingerprintOwners])
+    if (historicalOwners.size > 1) return failure([diagnostic('ambiguous-identity', 'input', 'references identify different historical identities', group.map((r) => r.input.recordKey))])
+    const candidateIds = new Set(group.flatMap((record) => [...historicalCandidates(record)])); const existingKeys = new Set(group.map((record) => recordOwners.get(recordText(record.input.recordKey))).filter((x): x is string => Boolean(x))); for (const id of existingKeys) candidateIds.add(id)
+    const requestedHistoricalIds = new Set(group.map((record) => record.input.publicId).filter((id): id is string => Boolean(id && idOwners.has(id))))
+    const evidenceIds = new Set([...candidateIds].filter((id) => !requestedHistoricalIds.has(id)))
+    if (requestedHistoricalIds.size > 0 && evidenceIds.size > 0 && [...requestedHistoricalIds].some((id) => !evidenceIds.has(id))) return failure([diagnostic('public-id-conflict', 'input.publicId', 'publicId is incompatible with historical evidence', group.map((r) => r.input.recordKey))])
     if (candidateIds.size > 1) return failure([diagnostic('identity-conflict', 'input', 'batch references incompatible identities', group.map((r) => r.input.recordKey))])
     const identityId = candidateIds.values().next().value as string | undefined; const identity = identityId ? idOwners.get(identityId) : undefined
     if (identityId && !identity) return failure([diagnostic('invalid-structure', 'input', 'candidate identity is unavailable', group.map((r) => r.input.recordKey))])

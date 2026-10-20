@@ -6,7 +6,7 @@ Questo modulo assegna identità persistenti nel namespace `killer-sudoku` tramit
 
 Prima di assegnare ID il modulo valida l’intero batch, calcola le `observationKey` canoniche e raggruppa le osservazioni compatibili tramite fingerprint, alias e public ID storico. Il raggruppamento usa la coppia esatta `[recordKey.source, recordKey.key]` per evitare collisioni fra chiavi contenenti `/`. Record distinti che condividono evidenza compatibile aggiornano la stessa identità; osservazioni diverse della stessa RecordKey nello stesso batch falliscono con `duplicate-record-key`. L’ordine degli input non determina ID, associazioni o serializzazione.
 
-I fingerprint current e legacy sono contratti distinti; il legacy è conservato byte per byte. Un alias sconosciuto o un public ID nuovo, da soli, non sono evidenza di contenuto. Un public ID storico può disambiguare soltanto riferimenti già compatibili. I conflitti non vengono risolti implicitamente.
+I fingerprint current e legacy sono contratti distinti; il legacy è conservato byte per byte. Un alias sconosciuto o un public ID nuovo, da soli, non sono evidenza di contenuto. Un public ID storico può disambiguare soltanto riferimenti già compatibili. I conflitti non vengono risolti implicitamente. Se un fingerprint noto e un alias noto indicano due identità storiche diverse, la diagnostica deterministica è `ambiguous-identity`; non viene usato `identity-conflict` per questo caso di riferimenti contraddittori.
 
 Le nuove identità adottano un public ID esplicito valido quando supportato da fingerprint/contenuto; altrimenti ricevono il minimo ID libero da `puzzle-000001` a `puzzle-999999`. Le riserve sono raccolte dall’intero registro e dall’intero batch prima dell’assegnazione.
 
