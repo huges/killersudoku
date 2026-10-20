@@ -280,6 +280,35 @@ describe('incremental historical registry', () => {
     expect(result.observations).toEqual([])
     expect(result.diagnostics[0].code).toBe('fingerprint-conflict')
   })
+
+  it('returns public-id-conflict before identity-conflict for known fingerprint and another historical ID', () => {
+    const first = assignIncremental(init(), [input(key('feed', 'owner-a'), fp('a'))], { initialization: true })
+    const second = assignIncremental(first.registry as Registry, [input(key('feed', 'owner-b'), fp('b'))], {})
+    const registry = second.registry as Registry
+    const ownerA = registry.identities.find((identity) => identity.fingerprints.some((fingerprint) => fingerprint.value === fp('a').value))
+    const ownerB = registry.identities.find((identity) => identity.fingerprints.some((fingerprint) => fingerprint.value === fp('b').value))
+    expect(ownerA).toBeDefined()
+    expect(ownerB).toBeDefined()
+    expect(ownerA?.publicId).not.toBe(ownerB?.publicId)
+    const result = assignIncremental(registry, [input(key('feed', 'new'), fp('a'), { publicId: ownerB!.publicId })], {})
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics[0].code).toBe('public-id-conflict')
+  })
+
+  it('orders validation diagnostics canonically regardless of collection order', () => {
+    const malformedAlias = input(key('feed', 'zeta'), fp('a'), { aliases: ['dup', 'dup'] })
+    const malformedFingerprint = input(key('feed', 'alpha'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('b').value } as never)
+    const result = assignIncremental(init(), [malformedAlias, malformedFingerprint], { initialization: true })
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-fingerprint', 'malformed-alias-list'])
+    expect(result.diagnostics[0].recordKeys).toEqual([key('feed', 'alpha')])
+    expect(result.diagnostics[1].recordKeys).toEqual([key('feed', 'zeta')])
+
+    const reversed = assignIncremental(init(), [malformedFingerprint, malformedAlias], { initialization: true })
+    expect(reversed.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-fingerprint', 'malformed-alias-list'])
+  })
 })
 
 function serialize(registry: Registry): string {

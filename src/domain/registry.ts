@@ -34,7 +34,9 @@ const sortedRecords = (keys: RecordKey[]): RecordKey[] => keys.map(clone).sort(r
 const fpKey = (fp: FingerprintRef): string => JSON.stringify([fp.contract, fp.kind, fp.value])
 const sameFp = (a: FingerprintRef, b: FingerprintRef): boolean => fpKey(a) === fpKey(b)
 const diagnostic = (code: string, path: string, message: string, recordKeys: RecordKey[] = []): Diagnostic => ({ code, path, recordKeys: sortedRecords(recordKeys), message })
-const failure = (diagnostics: Diagnostic[]): AssignmentResult => ({ registry: null, observations: [], diagnostics })
+const compareCanonical = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0
+const diagnosticCompare = (a: Diagnostic, b: Diagnostic): number => compareCanonical(JSON.stringify([a.code, a.path, a.recordKeys.map(recordText), a.message]), JSON.stringify([b.code, b.path, b.recordKeys.map(recordText), b.message]))
+const failure = (diagnostics: Diagnostic[]): AssignmentResult => ({ registry: null, observations: [], diagnostics: [...diagnostics].sort(diagnosticCompare) })
 const validRecordKey = (value: unknown): value is RecordKey => exact(value, ['source', 'key']) && typeof value.source === 'string' && typeof value.key === 'string' && recordPattern.test(value.source) && recordPattern.test(value.key)
 const validId = (value: unknown): value is string => typeof value === 'string' && idPattern.test(value)
 const validAlias = (value: unknown): value is string => typeof value === 'string' && aliasPattern.test(value)
