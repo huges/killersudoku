@@ -12,7 +12,6 @@ const key = (source: string, value: string) => ({ source, key: value })
 const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined, extra: Partial<AssignmentInput> = {}): AssignmentInput => {
   const { content, publicId, ...rest } = extra
   const sanitizedExtra = { ...rest }
-  delete sanitizedExtra.fingerprint
   return {
     recordKey,
     ...(fingerprint === undefined ? {} : { fingerprint }),
@@ -160,6 +159,13 @@ describe('incremental historical registry', () => {
     expect(invalidFingerprint.registry).toBeNull()
     expect(invalidFingerprint.observations).toEqual([])
     expect(invalidFingerprint.diagnostics[0].code).toBe('invalid-fingerprint')
+
+    const invalidExtraFingerprint = { contract: 'playable-content-v1', kind: 'legacy', value: fp('b').value } as never
+    const preservedExtra = input(key('feed', 'extra-fingerprint'), undefined, { fingerprint: invalidExtraFingerprint })
+    expect(preservedExtra).toHaveProperty('fingerprint', invalidExtraFingerprint)
+    const invalidExtraResult = assignIncremental(init(), [preservedExtra], { initialization: true })
+    expect(invalidExtraResult.registry).toBeNull()
+    expect(invalidExtraResult.diagnostics[0].code).toBe('invalid-fingerprint')
 
     const malformedRegistry = assignIncremental({ identities: null } as never, [], { initialization: true })
     expect(malformedRegistry.registry).toBeNull()
