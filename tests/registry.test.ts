@@ -154,6 +154,23 @@ describe('incremental historical registry', () => {
     expect(next.registry?.reservedAliases).toContain('reserved-alias')
   })
 
+  it('rejects malformed stateHistory elements atomically without mutating the registry', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'history'), fp('a'))], { initialization: true })
+    const registry = base.registry as Registry
+    const malformedEntries: unknown[] = [null, undefined, , {}, { state: 'current' }, { observationKey: 'missing-state' }, { state: 'invalid', observationKey: 'observation' }]
+
+    for (const entry of malformedEntries) {
+      const malformed = structuredClone(registry) as Registry
+      malformed.identities[0].stateHistory = [entry as never]
+      const before = JSON.stringify(malformed)
+      const result = assignIncremental(malformed, [], {})
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(JSON.stringify(malformed)).toBe(before)
+    }
+  })
+
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
     const invalidFingerprint = assignIncremental(init(), [input(key('feed', 'bad'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('a').value } as never)], { initialization: true })
     expect(invalidFingerprint.registry).toBeNull()

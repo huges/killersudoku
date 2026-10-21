@@ -91,6 +91,10 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (const identity of r.identities) {
     if (!Array.isArray(identity.stateHistory)) continue
     for (const state of identity.stateHistory) {
+      if (!exact(state, ['state', 'observationKey']) || (state.state !== 'current' && state.state !== 'removed') || typeof state.observationKey !== 'string') {
+        errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state history is invalid'))
+        continue
+      }
       const priorOwner = stateHistoryByObservation.get(state.observationKey)
       if (priorOwner && priorOwner !== identity.publicId) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state observation is duplicated across identities'))
       stateHistoryByObservation.set(state.observationKey, identity.publicId)
