@@ -85,16 +85,20 @@ function validateRegistry(value: unknown): Diagnostic[] {
     const key = recordText(association.recordKey); const old = records.get(key); if (old && old !== association.publicId) errors.push(diagnostic('identity-conflict', 'previousRegistry.associations', 'recordKey is assigned to different identities', [association.recordKey])); records.set(key, association.publicId)
   }
   const reservedIds = new Set(r.reservedIds); const reservedAliases = new Set(r.reservedAliases)
-  const associationByObservation = new Map<string, Association>()
-  for (const association of r.associations) associationByObservation.set(association.observationKey, association)
-  const stateHistoryByObservation = new Map<string, string>()
   for (const identity of r.identities) {
     if (!Array.isArray(identity.stateHistory)) continue
     for (const state of identity.stateHistory) {
       if (!exact(state, ['state', 'observationKey']) || (state.state !== 'current' && state.state !== 'removed') || typeof state.observationKey !== 'string') {
         errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state history is invalid'))
-        continue
       }
+    }
+  }
+  if (errors.length) return errors
+  const associationByObservation = new Map<string, Association>()
+  for (const association of r.associations) associationByObservation.set(association.observationKey, association)
+  const stateHistoryByObservation = new Map<string, string>()
+  for (const identity of r.identities) {
+    for (const state of identity.stateHistory) {
       const priorOwner = stateHistoryByObservation.get(state.observationKey)
       if (priorOwner && priorOwner !== identity.publicId) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state observation is duplicated across identities'))
       stateHistoryByObservation.set(state.observationKey, identity.publicId)
