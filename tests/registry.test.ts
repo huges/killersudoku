@@ -308,6 +308,30 @@ describe('incremental historical registry', () => {
       expect(malformed).toEqual(before)
       expect(missingIndex in array).toBe(missingIndex === 1 && array[missingIndex] === undefined)
     }
+
+    for (const value of [null, 7, false, {}, []] as unknown[]) {
+      for (const field of ['reservedIds', 'reservedAliases'] as const) {
+        const malformed = structuredClone(registry) as Registry
+        malformed[field] = [value] as never
+        const before = structuredClone(malformed)
+        const result = assignIncremental(malformed, [], {})
+        expect(result.registry).toBeNull()
+        expect(result.observations).toEqual([])
+        expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+        expect(result.diagnostics.some((diagnostic) => diagnostic.code === (field === 'reservedIds' ? 'invalid-id' : 'invalid-alias'))).toBe(false)
+        expect(malformed).toEqual(before)
+      }
+    }
+
+    const invalidStrings = structuredClone(registry) as Registry
+    invalidStrings.reservedIds = ['bad id']
+    invalidStrings.reservedAliases = ['bad alias']
+    const invalidStringResult = assignIncremental(invalidStrings, [], {})
+    expect(invalidStringResult.registry).toBeNull()
+    expect(invalidStringResult.observations).toEqual([])
+    expect(invalidStringResult.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(expect.arrayContaining(['invalid-id', 'invalid-alias']))
+    expect(invalidStrings.reservedIds).toEqual(['bad id'])
+    expect(invalidStrings.reservedAliases).toEqual(['bad alias'])
   })
 
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
