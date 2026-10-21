@@ -9,7 +9,7 @@ import {
 
 const fp = (hex: string) => ({ contract: 'legacy-sha256' as const, kind: 'legacy' as const, value: `sha256-${hex.repeat(64).slice(0, 64)}` })
 const key = (source: string, value: string) => ({ source, key: value })
-const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => {
+const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined, extra: Partial<AssignmentInput> = {}): AssignmentInput => {
   const { content, publicId, ...rest } = extra
   const sanitizedExtra = { ...rest }
   delete sanitizedExtra.fingerprint
@@ -119,7 +119,10 @@ describe('incremental historical registry', () => {
   })
 
   it('covers evidence and public-id diagnostics without partial results', () => {
-    const aliasOnly = assignIncremental(init(), [input(key('feed', 'alias-only'), undefined, { aliases: ['unknown'] })], { initialization: true })
+    const aliasOnlyInput = input(key('feed', 'alias-only'), undefined, { aliases: ['unknown'] })
+    expect(aliasOnlyInput).not.toHaveProperty('fingerprint')
+    expect(aliasOnlyInput).not.toHaveProperty('content')
+    const aliasOnly = assignIncremental(init(), [aliasOnlyInput], { initialization: true })
     expect(aliasOnly.registry).toBeNull()
     expect(aliasOnly.diagnostics[0].code).toBe('insufficient-identity-evidence')
 
@@ -172,7 +175,10 @@ describe('incremental historical registry', () => {
     expect(adopted.diagnostics).toEqual([])
     expect(adopted.registry?.identities[0].publicId).toBe('catalog-custom-7')
 
-    const publicOnly = assignIncremental(init(), [input(key('feed', 'public-only'), undefined, { publicId: 'catalog-custom-8' })], { initialization: true })
+    const publicOnlyInput = input(key('feed', 'public-only'), undefined, { publicId: 'catalog-custom-8' })
+    expect(publicOnlyInput).not.toHaveProperty('fingerprint')
+    expect(publicOnlyInput).not.toHaveProperty('content')
+    const publicOnly = assignIncremental(init(), [publicOnlyInput], { initialization: true })
     expect(publicOnly.registry).toBeNull()
     expect(publicOnly.diagnostics[0].code).toBe('insufficient-identity-evidence')
 
