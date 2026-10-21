@@ -245,6 +245,46 @@ describe('incremental historical registry', () => {
     expect(0 in missingAssociation).toBe(false)
   })
 
+  it('rejects sparse and explicitly undefined nested arrays before validation can skip elements', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'nested-arrays'), fp('c'), { aliases: ['known'] })], { initialization: true })
+    const registry = base.registry as Registry
+
+    const cases: Array<(candidate: Registry) => void> = [
+      (candidate) => { candidate.identities[0].fingerprints = new Array(2) as Array<never>; candidate.identities[0].fingerprints[1] = fp('d') as never },
+      (candidate) => { candidate.identities[0].aliases = new Array(2) as Array<never>; candidate.identities[0].aliases[1] = 'known' as never },
+      (candidate) => { candidate.identities[0].fingerprints = [undefined as never] },
+      (candidate) => { candidate.identities[0].aliases = [undefined as never] },
+    ]
+
+    for (const mutate of cases) {
+      const malformed = structuredClone(registry) as Registry
+      mutate(malformed)
+      const before = structuredClone(malformed)
+      expect(() => assignIncremental(malformed, [], {})).not.toThrow()
+      const result = assignIncremental(malformed, [], {})
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(malformed).toEqual(before)
+    }
+
+    const inputCases: AssignmentInput[] = [
+      input(key('feed', 'sparse-input'), fp('e'), { aliases: Object.assign(new Array(2), { 1: 'alias' }) as string[] }),
+      input(key('feed', 'mixed-input'), fp('f'), { aliases: Object.assign(['alias'], { length: 2 }) as string[] }),
+      input(key('feed', 'undefined-input'), fp('g'), { aliases: [undefined as never] }),
+    ]
+    for (const candidate of inputCases) {
+      const before = structuredClone(candidate)
+      expect(() => assignIncremental(init(), [candidate], { initialization: true })).not.toThrow()
+      const result = assignIncremental(init(), [candidate], { initialization: true })
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(candidate).toEqual(before)
+      if (candidate.aliases.length === 2) expect(0 in candidate.aliases).toBe(true)
+    }
+  })
+
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
     const invalidFingerprint = assignIncremental(init(), [input(key('feed', 'bad'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('a').value } as never)], { initialization: true })
     expect(invalidFingerprint.registry).toBeNull()

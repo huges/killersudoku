@@ -61,6 +61,12 @@ function validateRegistry(value: unknown): Diagnostic[] {
       errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}]`, 'identity history element is invalid'))
       continue
     }
+    for (let fingerprintIndex = 0; fingerprintIndex < identity.fingerprints.length; fingerprintIndex += 1) {
+      if (!(fingerprintIndex in identity.fingerprints) || !validFingerprint(identity.fingerprints[fingerprintIndex])) errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}].fingerprints[${fingerprintIndex}]`, 'fingerprint element is invalid'))
+    }
+    for (let aliasIndex = 0; aliasIndex < identity.aliases.length; aliasIndex += 1) {
+      if (!(aliasIndex in identity.aliases) || !validAlias(identity.aliases[aliasIndex])) errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}].aliases[${aliasIndex}]`, 'alias element is invalid'))
+    }
     for (let stateIndex = 0; stateIndex < identity.stateHistory.length; stateIndex += 1) {
       if (!(stateIndex in identity.stateHistory) || !exact(identity.stateHistory[stateIndex], ['state', 'observationKey']) || typeof identity.stateHistory[stateIndex].observationKey !== 'string') errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}].stateHistory[${stateIndex}]`, 'state history element is invalid'))
     }
@@ -68,7 +74,13 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (let index = 0; index < r.associations.length; index += 1) {
     if (!(index in r.associations)) { errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is missing')); continue }
     const association = r.associations[index]
-    if (!exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey']) || !validRecordKey(association.recordKey) || !Array.isArray(association.aliases) || association.aliases.some((alias) => typeof alias !== 'string') || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is invalid'))
+    const associationAliasesValid = Array.isArray(association.aliases) && (() => {
+      for (let aliasIndex = 0; aliasIndex < association.aliases.length; aliasIndex += 1) {
+        if (!(aliasIndex in association.aliases) || typeof association.aliases[aliasIndex] !== 'string') return false
+      }
+      return true
+    })()
+    if (!exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey']) || !validRecordKey(association.recordKey) || !associationAliasesValid || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is invalid'))
     else for (let aliasIndex = 0; aliasIndex < association.aliases.length; aliasIndex += 1) if (!(aliasIndex in association.aliases)) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}].aliases[${aliasIndex}]`, 'association alias is missing'))
   }
   if (errors.length) return errors
@@ -240,7 +252,7 @@ export function assignIncremental(previousRegistry: Registry, input: readonly As
   for (let index = 0; index < input.length; index += 1) {
     const raw: unknown = input[index]; const path = `input[${index}]`; if (!exact(raw, ['recordKey', ...(typeof raw === 'object' && raw !== null && Object.prototype.hasOwnProperty.call(raw, 'fingerprint') ? ['fingerprint'] : []), ...(typeof raw === 'object' && raw !== null && Object.prototype.hasOwnProperty.call(raw, 'content') ? ['content'] : []), 'aliases', ...(typeof raw === 'object' && raw !== null && Object.prototype.hasOwnProperty.call(raw, 'publicId') ? ['publicId'] : []), 'state'])) { errors.push(diagnostic('invalid-structure', path, 'assignment input has unknown or missing properties')); continue }
     const item = raw as AssignmentInput; const keyOk = validRecordKey(item.recordKey); if (!keyOk) errors.push(diagnostic('invalid-record-key', `${path}.recordKey`, 'recordKey source and key are invalid'))
-    const aliasesOk = Array.isArray(item.aliases) && item.aliases.every(validAlias); if (!aliasesOk) errors.push(diagnostic('invalid-alias', `${path}.aliases`, 'alias is invalid', keyOk ? [item.recordKey] : [])); if (Array.isArray(item.aliases) && new Set(item.aliases).size !== item.aliases.length) errors.push(diagnostic('malformed-alias-list', `${path}.aliases`, 'aliases must be unique', keyOk ? [item.recordKey] : []))
+    const aliasesOk = Array.isArray(item.aliases); if (!aliasesOk) errors.push(diagnostic('invalid-alias', `${path}.aliases`, 'alias list is invalid', keyOk ? [item.recordKey] : [])); else { for (let aliasIndex = 0; aliasIndex < item.aliases.length; aliasIndex += 1) { if (!(aliasIndex in item.aliases) || !validAlias(item.aliases[aliasIndex])) errors.push(diagnostic('invalid-structure', `${path}.aliases[${aliasIndex}]`, 'alias element is invalid', keyOk ? [item.recordKey] : [])) } if (new Set(item.aliases).size !== item.aliases.length) errors.push(diagnostic('malformed-alias-list', `${path}.aliases`, 'aliases must be unique', keyOk ? [item.recordKey] : [])) }
     const fpOk = item.fingerprint === undefined || validFingerprint(item.fingerprint); if (!fpOk) errors.push(diagnostic('invalid-fingerprint', `${path}.fingerprint`, 'fingerprint is invalid', keyOk ? [item.recordKey] : []))
     if (item.publicId !== undefined && !validId(item.publicId)) errors.push(diagnostic('invalid-id', `${path}.publicId`, 'publicId is invalid', keyOk ? [item.recordKey] : []))
     if (item.state !== 'current' && item.state !== 'removed') errors.push(diagnostic('invalid-structure', `${path}.state`, 'state is invalid', keyOk ? [item.recordKey] : []))
