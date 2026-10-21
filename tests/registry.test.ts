@@ -297,6 +297,29 @@ describe('incremental historical registry', () => {
     expect(incompatibleFingerprintWithKnownAlias.diagnostics[0].code).toBe('fingerprint-alias-conflict')
   })
 
+  it('keeps new shared aliases from merging distinct fingerprints', () => {
+    const result = assignIncremental(init(), [
+      input(key('feed', 'alias-one'), fp('1'), { aliases: ['new-shared-alias'] }),
+      input(key('feed', 'alias-two'), fp('2'), { aliases: ['new-shared-alias'] }),
+    ], { initialization: true })
+
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics[0].code).toBe('alias-conflict')
+    expect(result.diagnostics[0].code).not.toBe('fingerprint-conflict')
+  })
+
+  it('does not merge distinct fingerprints through a new shared public ID', () => {
+    const result = assignIncremental(init(), [
+      input(key('feed', 'public-one'), fp('3'), { publicId: 'new-shared-id' }),
+      input(key('feed', 'public-two'), fp('4'), { publicId: 'new-shared-id' }),
+    ], { initialization: true })
+
+    expect(result.registry).toBeNull()
+    expect(result.observations).toEqual([])
+    expect(result.diagnostics[0].code).toBe('id-conflict')
+  })
+
   it('rejects divergent content and preserves input objects on failure', () => {
     const content = { size: 1, clues: [{ row: 0, column: 0, value: 1 }], cages: [] } as never
     const observed = input(key('feed', 'content'), fp('a'), { content })
