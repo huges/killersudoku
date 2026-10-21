@@ -285,6 +285,31 @@ describe('incremental historical registry', () => {
     }
   })
 
+  it('rejects sparse and explicitly undefined reservation arrays atomically', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'reservation-boundary'), fp('h'))], { initialization: true })
+    const registry = base.registry as Registry
+
+    const cases: Array<(candidate: Registry) => { array: string[]; missingIndex: number }> = [
+      (candidate) => { candidate.reservedIds = new Array(2) as string[]; candidate.reservedIds[1] = 'reserved-id'; return { array: candidate.reservedIds, missingIndex: 0 } },
+      (candidate) => { candidate.reservedAliases = new Array(2) as string[]; candidate.reservedAliases[1] = 'reserved-alias'; return { array: candidate.reservedAliases, missingIndex: 0 } },
+      (candidate) => { candidate.reservedIds = ['reserved-id', undefined as never]; return { array: candidate.reservedIds, missingIndex: 1 } },
+      (candidate) => { candidate.reservedAliases = ['reserved-alias', undefined as never]; return { array: candidate.reservedAliases, missingIndex: 1 } },
+    ]
+
+    for (const mutate of cases) {
+      const malformed = structuredClone(registry) as Registry
+      const { array, missingIndex } = mutate(malformed)
+      const before = structuredClone(malformed)
+      expect(() => assignIncremental(malformed, [], {})).not.toThrow()
+      const result = assignIncremental(malformed, [], {})
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(malformed).toEqual(before)
+      expect(missingIndex in array).toBe(missingIndex === 1 && array[missingIndex] === undefined)
+    }
+  })
+
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
     const invalidFingerprint = assignIncremental(init(), [input(key('feed', 'bad'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('a').value } as never)], { initialization: true })
     expect(invalidFingerprint.registry).toBeNull()

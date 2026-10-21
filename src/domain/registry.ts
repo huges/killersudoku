@@ -74,27 +74,32 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (let index = 0; index < r.associations.length; index += 1) {
     if (!(index in r.associations)) { errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is missing')); continue }
     const association = r.associations[index]
-    const associationAliasesValid = Array.isArray(association.aliases) && (() => {
+    const associationShapeValid = exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey'])
+    const associationAliasesValid = associationShapeValid && Array.isArray(association.aliases) && (() => {
       for (let aliasIndex = 0; aliasIndex < association.aliases.length; aliasIndex += 1) {
         if (!(aliasIndex in association.aliases) || typeof association.aliases[aliasIndex] !== 'string') return false
       }
       return true
     })()
-    if (!exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey']) || !validRecordKey(association.recordKey) || !associationAliasesValid || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is invalid'))
+    if (!associationShapeValid || !validRecordKey(association.recordKey) || !associationAliasesValid || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is invalid'))
     else for (let aliasIndex = 0; aliasIndex < association.aliases.length; aliasIndex += 1) if (!(aliasIndex in association.aliases)) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}].aliases[${aliasIndex}]`, 'association alias is missing'))
   }
   if (errors.length) return errors
 
   const ids = new Map<string, IdentityHistory>(); const fps = new Map<string, string>(); const aliases = new Map<string, string>(); const records = new Map<string, string>()
   const reservedIdValues = new Set<string>()
-  for (const id of r.reservedIds) {
-    if (!validId(id)) errors.push(diagnostic('invalid-id', 'previousRegistry.reservedIds', 'reserved ID is invalid'))
+  for (let reservedIndex = 0; reservedIndex < r.reservedIds.length; reservedIndex += 1) {
+    if (!(reservedIndex in r.reservedIds)) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedIds[${reservedIndex}]`, 'reserved ID element is missing')); continue }
+    const id = r.reservedIds[reservedIndex]
+    if (!validId(id)) errors.push(diagnostic('invalid-id', `previousRegistry.reservedIds[${reservedIndex}]`, 'reserved ID is invalid'))
     if (reservedIdValues.has(id)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID is duplicated'))
     reservedIdValues.add(id)
   }
   const reservedAliasValues = new Set<string>()
-  for (const alias of r.reservedAliases) {
-    if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', 'previousRegistry.reservedAliases', 'reserved alias is invalid'))
+  for (let reservedIndex = 0; reservedIndex < r.reservedAliases.length; reservedIndex += 1) {
+    if (!(reservedIndex in r.reservedAliases)) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedAliases[${reservedIndex}]`, 'reserved alias element is missing')); continue }
+    const alias = r.reservedAliases[reservedIndex]
+    if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', `previousRegistry.reservedAliases[${reservedIndex}]`, 'reserved alias is invalid'))
     if (reservedAliasValues.has(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias is duplicated'))
     reservedAliasValues.add(alias)
   }
