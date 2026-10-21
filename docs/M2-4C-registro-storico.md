@@ -8,7 +8,7 @@ Prima di assegnare ID il modulo valida l’intero batch, calcola le `observation
 
 I fingerprint current e legacy sono contratti distinti; il legacy è conservato byte per byte. Un alias sconosciuto o un public ID nuovo, da soli, non sono evidenza di contenuto. Nella risoluzione intra-batch questi riferimenti non storici non sono token di unione: osservazioni con fingerprint incompatibili restano candidate separate e la validazione globale segnala poi la collisione del proprietario (`alias-conflict` o `id-conflict`). Un public ID storico può disambiguare soltanto riferimenti già compatibili. I conflitti non vengono risolti implicitamente. Se un fingerprint noto e un alias noto indicano due identità storiche diverse, la diagnostica deterministica è `ambiguous-identity`; non viene usato `identity-conflict` per questo caso di riferimenti contraddittori.
 
-Le nuove identità adottano un public ID esplicito valido quando supportato da fingerprint/contenuto; altrimenti ricevono il minimo ID libero da `puzzle-000001` a `puzzle-999999`. Le riserve sono raccolte dall’intero registro e dall’intero batch prima dell’assegnazione.
+Le nuove identità adottano un public ID esplicito valido quando supportato da fingerprint/contenuto; altrimenti ricevono il minimo ID libero da `puzzle-000001` a `puzzle-999999`. Le riserve sono raccolte dall’intero registro e dall’intero batch prima dell’assegnazione: la prenotazione del proprio ID da parte del gruppo corrente è ammessa, mentre una prenotazione appartenente a un altro gruppo o proprietario produce `id-conflict`; l’ID non viene mai riutilizzato per fondere gruppi incompatibili.
 
 ## Storia e stato
 

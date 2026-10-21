@@ -271,8 +271,25 @@ describe('incremental historical registry', () => {
     const adopted = assignIncremental(init(), [input(key('feed', 'adopted'), fp('1'), { publicId: 'catalog-custom-7' })], { initialization: true })
     expect(adopted.diagnostics).toEqual([])
     expect(adopted.registry?.identities[0].publicId).toBe('catalog-custom-7')
+    expect(adopted.registry?.associations[0].observedPublicId).toBe('catalog-custom-7')
 
-    const publicOnlyInput = input(key('feed', 'public-only'), undefined, { publicId: 'catalog-custom-8' })
+    const compatibleShared = assignIncremental(init(), [
+      input(key('feed', 'adopted-one'), fp('1'), { publicId: 'catalog-custom-8' }),
+      input(key('feed', 'adopted-two'), fp('1'), { publicId: 'catalog-custom-8' }),
+    ], { initialization: true })
+    expect(compatibleShared.diagnostics).toEqual([])
+    expect(compatibleShared.registry?.identities).toHaveLength(1)
+    expect(compatibleShared.registry?.identities[0].publicId).toBe('catalog-custom-8')
+    expect(compatibleShared.registry?.associations).toHaveLength(2)
+
+    const reserved = createEmptyRegistry()
+    reserved.reservedIds.push('catalog-reserved')
+    const reservedResult = assignIncremental(reserved, [input(key('feed', 'reserved'), fp('1'), { publicId: 'catalog-reserved' })], { initialization: true })
+    expect(reservedResult.registry).toBeNull()
+    expect(reservedResult.observations).toEqual([])
+    expect(reservedResult.diagnostics[0].code).toBe('id-conflict')
+
+    const publicOnlyInput = input(key('feed', 'public-only'), undefined, { publicId: 'catalog-custom-9' })
     expect(publicOnlyInput).not.toHaveProperty('fingerprint')
     expect(publicOnlyInput).not.toHaveProperty('content')
     const publicOnly = assignIncremental(init(), [publicOnlyInput], { initialization: true })
@@ -284,6 +301,30 @@ describe('incremental historical registry', () => {
     const result = assignIncremental(init(), [current, legacy], { initialization: true })
     expect(result.diagnostics).toEqual([])
     expect(result.registry?.identities).toHaveLength(2)
+  })
+
+  it('keeps explicit-ID resolution deterministic under batch reversal and rejects incompatible owners atomically', () => {
+    const compatible = [
+      input(key('feed', 'compatible-one'), fp('a'), { publicId: 'catalog-deterministic' }),
+      input(key('feed', 'compatible-two'), fp('a'), { publicId: 'catalog-deterministic' }),
+    ]
+    const forward = assignIncremental(init(), compatible, { initialization: true })
+    const reversed = assignIncremental(init(), [...compatible].reverse(), { initialization: true })
+    expect(forward.diagnostics).toEqual([])
+    expect(JSON.stringify(forward)).toBe(JSON.stringify(reversed))
+
+    const incompatible = [
+      input(key('feed', 'incompatible-one'), fp('b'), { publicId: 'catalog-incompatible' }),
+      input(key('feed', 'incompatible-two'), fp('c'), { publicId: 'catalog-incompatible' }),
+    ]
+    const conflictForward = assignIncremental(init(), incompatible, { initialization: true })
+    const conflictReversed = assignIncremental(init(), [...incompatible].reverse(), { initialization: true })
+    for (const result of [conflictForward, conflictReversed]) {
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics[0].code).toBe('id-conflict')
+    }
+    expect(JSON.stringify(conflictForward)).toBe(JSON.stringify(conflictReversed))
   })
 
   it('honors global reservations and reports exhaustion without partial output', () => {
