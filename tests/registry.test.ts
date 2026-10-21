@@ -10,14 +10,16 @@ import {
 const fp = (hex: string) => ({ contract: 'legacy-sha256' as const, kind: 'legacy' as const, value: `sha256-${hex.repeat(64).slice(0, 64)}` })
 const key = (source: string, value: string) => ({ source, key: value })
 const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => {
-  const { content, publicId, fingerprint: _ignoredFingerprint, ...rest } = extra
+  const { content, publicId, ...rest } = extra
+  const sanitizedExtra = { ...rest }
+  delete sanitizedExtra.fingerprint
   return {
     recordKey,
     ...(fingerprint === undefined ? {} : { fingerprint }),
     ...(content === undefined ? {} : { content }),
     aliases: [],
     state: 'current',
-    ...rest,
+    ...sanitizedExtra,
     ...(publicId === undefined ? {} : { publicId }),
   }
 }
