@@ -91,6 +91,7 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (let reservedIndex = 0; reservedIndex < r.reservedIds.length; reservedIndex += 1) {
     if (!(reservedIndex in r.reservedIds)) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedIds[${reservedIndex}]`, 'reserved ID element is missing')); continue }
     const id = r.reservedIds[reservedIndex]
+    if (id === undefined) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedIds[${reservedIndex}]`, 'reserved ID element is invalid')); continue }
     if (!validId(id)) errors.push(diagnostic('invalid-id', `previousRegistry.reservedIds[${reservedIndex}]`, 'reserved ID is invalid'))
     if (reservedIdValues.has(id)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID is duplicated'))
     reservedIdValues.add(id)
@@ -99,6 +100,7 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (let reservedIndex = 0; reservedIndex < r.reservedAliases.length; reservedIndex += 1) {
     if (!(reservedIndex in r.reservedAliases)) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedAliases[${reservedIndex}]`, 'reserved alias element is missing')); continue }
     const alias = r.reservedAliases[reservedIndex]
+    if (alias === undefined) { errors.push(diagnostic('invalid-structure', `previousRegistry.reservedAliases[${reservedIndex}]`, 'reserved alias element is invalid')); continue }
     if (!validAlias(alias)) errors.push(diagnostic('invalid-alias', `previousRegistry.reservedAliases[${reservedIndex}]`, 'reserved alias is invalid'))
     if (reservedAliasValues.has(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias is duplicated'))
     reservedAliasValues.add(alias)
