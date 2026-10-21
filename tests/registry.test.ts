@@ -157,7 +157,7 @@ describe('incremental historical registry', () => {
   it('rejects malformed stateHistory elements atomically without mutating the registry', () => {
     const base = assignIncremental(init(), [input(key('feed', 'history'), fp('a'))], { initialization: true })
     const registry = base.registry as Registry
-    const malformedEntries: unknown[] = [null, undefined, , {}, { state: 'current' }, { observationKey: 'missing-state' }, { state: 'invalid', observationKey: 'observation' }]
+    const malformedEntries: unknown[] = [null, undefined, {}, { state: 'current' }, { observationKey: 'missing-state' }, { state: 'invalid', observationKey: 'observation' }]
 
     for (const entry of malformedEntries) {
       const malformed = structuredClone(registry) as Registry
@@ -169,6 +169,17 @@ describe('incremental historical registry', () => {
       expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
       expect(JSON.stringify(malformed)).toBe(before)
     }
+
+    const sparse = structuredClone(registry) as Registry
+    const sparseHistory = new Array(1) as Array<never>
+    sparse.identities[0].stateHistory = sparseHistory
+    const sparseBefore = JSON.stringify(sparse)
+    const sparseResult = assignIncremental(sparse, [], {})
+    expect(sparseResult.registry).toBeNull()
+    expect(sparseResult.observations).toEqual([])
+    expect(sparseResult.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+    expect(JSON.stringify(sparse)).toBe(sparseBefore)
+    expect(0 in sparseHistory).toBe(false)
   })
 
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
