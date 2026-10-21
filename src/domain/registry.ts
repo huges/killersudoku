@@ -65,7 +65,8 @@ function validateRegistry(value: unknown): Diagnostic[] {
     reservedAliasValues.add(alias)
   }
   for (const identity of r.identities) {
-    if (!exact(identity, ['publicId', 'firstAssignment', 'fingerprints', 'aliases', 'stateHistory', 'currentState', 'currentStateObservation']) || !validId(identity.publicId) || !exact(identity.firstAssignment, ['recordKey', 'observationKey']) || !validRecordKey(identity.firstAssignment.recordKey) || typeof identity.firstAssignment.observationKey !== 'string' || !Array.isArray(identity.fingerprints) || !Array.isArray(identity.aliases) || !Array.isArray(identity.stateHistory) || (identity.currentState !== 'current' && identity.currentState !== 'removed') || typeof identity.currentStateObservation !== 'string') { errors.push(diagnostic('invalid-structure', 'previousRegistry.identities', 'identity history is invalid')); continue }
+    const identityShapeValid = exact(identity, ['publicId', 'firstAssignment', 'fingerprints', 'aliases', 'stateHistory', 'currentState', 'currentStateObservation']) && validId(identity.publicId) && exact(identity.firstAssignment, ['recordKey', 'observationKey']) && validRecordKey(identity.firstAssignment.recordKey) && typeof identity.firstAssignment.observationKey === 'string' && Array.isArray(identity.fingerprints) && Array.isArray(identity.aliases) && Array.isArray(identity.stateHistory) && (identity.currentState === 'current' || identity.currentState === 'removed') && typeof identity.currentStateObservation === 'string'
+    if (!identityShapeValid) { errors.push(diagnostic('invalid-structure', 'previousRegistry.identities', 'identity history is invalid')); continue }
     if (ids.has(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.identities', 'publicId belongs to multiple identities'))
     ids.set(identity.publicId, identity)
     const identityFingerprints = new Set<string>()
@@ -88,12 +89,14 @@ function validateRegistry(value: unknown): Diagnostic[] {
   for (const association of r.associations) associationByObservation.set(association.observationKey, association)
   const stateHistoryByObservation = new Map<string, string>()
   for (const identity of r.identities) {
+    if (!Array.isArray(identity.stateHistory)) continue
     for (const state of identity.stateHistory) {
       const priorOwner = stateHistoryByObservation.get(state.observationKey)
       if (priorOwner && priorOwner !== identity.publicId) errors.push(diagnostic('invalid-structure', 'previousRegistry.identities.stateHistory', 'state observation is duplicated across identities'))
       stateHistoryByObservation.set(state.observationKey, identity.publicId)
     }
   }
+  if (errors.length) return errors
   for (const identity of r.identities) {
     if (reservedIds.has(identity.publicId) && !r.reservedIds.includes(identity.publicId)) errors.push(diagnostic('id-conflict', 'previousRegistry.reservedIds', 'reserved ID conflict'))
     for (const alias of identity.aliases) if (reservedAliases.has(alias) && !r.reservedAliases.includes(alias)) errors.push(diagnostic('alias-conflict', 'previousRegistry.reservedAliases', 'reserved alias conflict'))
@@ -257,13 +260,13 @@ export function assignIncremental(previousRegistry: Registry, input: readonly As
     const identityId = candidateIds.values().next().value as string | undefined; const identity = identityId ? idOwners.get(identityId) : undefined
     if (identityId && !identity) return failure([diagnostic('invalid-structure', 'input', 'candidate identity is unavailable', group.map((r) => r.input.recordKey))])
     const fingerprints = new Set(group.flatMap((record) => { const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null); return fp ? [fpKey(fp)] : [] })); if (fingerprints.size > 1) return failure([diagnostic(identity ? 'fingerprint-conflict' : 'identity-conflict', 'input.fingerprint', 'batch contains incompatible fingerprints', group.map((r) => r.input.recordKey))])
-    if (identity && group.some((record) => { const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null); return Boolean(fp && identity.fingerprints.some((old) => old.contract === fp.contract && old.value !== fp.value)) })) return failure([diagnostic('fingerprint-conflict', 'input.fingerprint', 'fingerprint conflicts with identity history', group.map((r) => r.input.recordKey))])
     const knownAliases = group.flatMap((record) => record.input.aliases.filter((alias) => aliasOwners.has(alias)))
     const hasUnknownFingerprint = group.some((record) => {
       const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null)
       return Boolean(fp && !fpOwners.has(fpKey(fp)))
     })
     if (knownAliases.length > 0 && hasUnknownFingerprint) return failure([diagnostic('fingerprint-alias-conflict', 'input', 'unknown content cannot use a known alias', group.map((r) => r.input.recordKey))])
+    if (identity && group.some((record) => { const fp = record.input.fingerprint ?? (record.derived ? { contract: 'playable-content-v1', kind: 'current', value: record.derived } as FingerprintRef : null); return Boolean(fp && identity.fingerprints.some((old) => old.contract === fp.contract && old.value !== fp.value)) })) return failure([diagnostic('fingerprint-conflict', 'input.fingerprint', 'fingerprint conflicts with identity history', group.map((r) => r.input.recordKey))])
     if (identity && hasUnknownFingerprint) return failure([diagnostic('fingerprint-conflict', 'input.fingerprint', 'fingerprint is incompatible with the historical identity', group.map((r) => r.input.recordKey))])
     if (!identity && group.every((record) => !record.input.fingerprint && !record.derived)) return failure([diagnostic('insufficient-identity-evidence', 'input', 'identity evidence is required', group.map((r) => r.input.recordKey))])
     const requested = new Set(group.map((r) => r.input.publicId).filter((id): id is string => Boolean(id))); if (requested.size > 1) return failure([diagnostic('public-id-conflict', 'input.publicId', 'one identity has multiple public IDs', group.map((r) => r.input.recordKey))]); if (identity && requested.size && [...requested][0] !== identity.publicId) return failure([diagnostic('public-id-conflict', 'input.publicId', 'publicId is assigned to another identity', group.map((r) => r.input.recordKey))])

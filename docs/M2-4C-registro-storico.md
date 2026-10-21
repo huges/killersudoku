@@ -19,3 +19,10 @@ Il registro e il risultato hanno ordine di campi e array canonico, con `null` es
 ## Diagnostiche e verifica
 
 Sono mantenuti i codici `insufficient-identity-evidence`, `malformed-alias-list`, `ambiguous-identity`, `identity-conflict`, `fingerprint-conflict`, `fingerprint-alias-conflict`, `public-id-conflict`, `duplicate-record-key`, `incompatible-state` e `id-exhausted`, oltre ai codici strutturali. Ogni diagnostica contiene solo `code`, `path`, `recordKeys` ordinati e `message`. I test `tests/registry.test.ts` coprono raggruppamento batch, public ID storico, scelta minima dello stato, A/B/A, atomicità e collisioni della coppia RecordKey.
+
+## Correzioni di regressione
+
+- Il caso di fingerprint sconosciuto con alias noto usa ora un fingerprint realmente distinto e produce `fingerprint-alias-conflict`, come previsto dalla tabella di risoluzione; il caso fingerprint noto con alias nuovo è verificato separatamente e resta valido.
+- Le riserve del fixture ID includono anche il primo ID generabile: l'identità nuova conserva quindi il minimo ID libero effettivamente atteso, senza modificare l'algoritmo di assegnazione.
+- La validazione della struttura dell'identità precede ogni iterazione di `stateHistory`; un registro malformato restituisce diagnostici e risultato atomico (`registry: null`, osservazioni vuote), senza eccezioni native.
+- Lo storico cumulativo non associa fingerprint incompatibili tramite alias: le osservazioni successive riusano il fingerprint compatibile e dimostrano la conservazione dello storico di stati e alias secondo il contratto.

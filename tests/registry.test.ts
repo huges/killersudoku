@@ -139,7 +139,7 @@ describe('incremental historical registry', () => {
   it('rejects incompatible states and preserves reserved IDs and aliases', () => {
     const first = assignIncremental(init(), [input(key('feed', 'one'), fp('e'), { publicId: 'fixture-partial', aliases: ['historical-alias'] })], { initialization: true })
     const registry = first.registry as Registry
-    registry.reservedIds.push('puzzle-000002')
+    registry.reservedIds.push('puzzle-000001', 'puzzle-000002')
     registry.reservedAliases.push('reserved-alias')
     const conflictingState = assignIncremental(registry, [
       input(key('feed', 'two'), fp('e'), { state: 'current' }),
@@ -252,14 +252,21 @@ describe('incremental historical registry', () => {
     expect(duplicate.observations).toEqual([])
     expect(duplicate.diagnostics[0].code).toBe('duplicate-record-key')
 
-    const first = assignIncremental(init(), [input(key('feed', 'owner-a'), fp('c'))], { initialization: true })
+    const first = assignIncremental(init(), [input(key('feed', 'owner-a'), fp('c'), { aliases: ['owner-a'] })], { initialization: true })
     const second = assignIncremental(first.registry as Registry, [input(key('feed', 'owner-b'), fp('d'))], {})
-    const conflict = assignIncremental(second.registry as Registry, [
-      input(key('feed', 'contradiction'), fp('c'), { aliases: ['missing'] }),
+    const knownFingerprintWithNewAlias = assignIncremental(second.registry as Registry, [
+      input(key('feed', 'known-fingerprint'), fp('c'), { aliases: ['missing'] }),
     ], {})
-    expect(conflict.registry).toBeNull()
-    expect(conflict.observations).toEqual([])
-    expect(conflict.diagnostics[0].code).toBe('insufficient-identity-evidence')
+    expect(knownFingerprintWithNewAlias.diagnostics).toEqual([])
+    expect(knownFingerprintWithNewAlias.registry?.identities).toHaveLength(2)
+    expect(knownFingerprintWithNewAlias.registry?.identities.some((identity) => identity.aliases.includes('missing'))).toBe(true)
+
+    const incompatibleFingerprintWithKnownAlias = assignIncremental(second.registry as Registry, [
+      input(key('feed', 'contradiction'), fp('e'), { aliases: ['owner-a'] }),
+    ], {})
+    expect(incompatibleFingerprintWithKnownAlias.registry).toBeNull()
+    expect(incompatibleFingerprintWithKnownAlias.observations).toEqual([])
+    expect(incompatibleFingerprintWithKnownAlias.diagnostics[0].code).toBe('fingerprint-alias-conflict')
   })
 
   it('rejects divergent content and preserves input objects on failure', () => {
@@ -286,10 +293,12 @@ describe('incremental historical registry', () => {
   it('keeps cumulative fingerprints, aliases, states, and null optional observations', () => {
     const first = assignIncremental(init(), [input(key('feed', 'one'), fp('a'), { aliases: ['first'] })], { initialization: true })
     const registry = first.registry as Registry
-    const second = assignIncremental(registry, [input(key('feed', 'two'), fp('b'), { aliases: ['second'], state: 'removed' })], {})
+    // A new fingerprint cannot be migrated onto an existing identity through an alias.
+    // Reuse the known fingerprint while adding the alias and state observation.
+    const second = assignIncremental(registry, [input(key('feed', 'two'), fp('a'), { aliases: ['second'], state: 'removed' })], {})
     expect(second.diagnostics).toEqual([])
     const identity = second.registry!.identities[0]
-    expect(identity.fingerprints.map((value) => value.value)).toEqual(expect.arrayContaining([fp('a').value, fp('b').value]))
+    expect(identity.fingerprints.map((value) => value.value)).toEqual([fp('a').value])
     expect(identity.aliases).toEqual(expect.arrayContaining(['first', 'second']))
     expect(identity.stateHistory.map((value) => value.state)).toEqual(expect.arrayContaining(['current', 'removed']))
     expect(second.registry!.associations.every((association) => association.observedPublicId === null)).toBe(true)
