@@ -9,7 +9,18 @@ import {
 
 const fp = (hex: string) => ({ contract: 'legacy-sha256' as const, kind: 'legacy' as const, value: `sha256-${hex.repeat(64).slice(0, 64)}` })
 const key = (source: string, value: string) => ({ source, key: value })
-const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => ({ recordKey, ...(fingerprint === undefined ? {} : { fingerprint }), aliases: [], state: 'current', ...extra })
+const input = (recordKey: ReturnType<typeof key>, fingerprint: FingerprintRef | undefined = fp('a'), extra: Partial<AssignmentInput> = {}): AssignmentInput => {
+  const { content, publicId, fingerprint: _ignoredFingerprint, ...rest } = extra
+  return {
+    recordKey,
+    ...(fingerprint === undefined ? {} : { fingerprint }),
+    ...(content === undefined ? {} : { content }),
+    aliases: [],
+    state: 'current',
+    ...rest,
+    ...(publicId === undefined ? {} : { publicId }),
+  }
+}
 const init = (): Registry => createEmptyRegistry()
 
 describe('incremental historical registry', () => {
@@ -122,7 +133,7 @@ describe('incremental historical registry', () => {
   })
 
   it('rejects incompatible states and preserves reserved IDs and aliases', () => {
-    const first = assignIncremental(init(), [input(key('feed', 'one'), fp('e'), { publicId: 'fixture-partial', aliases: ['reserved-alias'] })], { initialization: true })
+    const first = assignIncremental(init(), [input(key('feed', 'one'), fp('e'), { publicId: 'fixture-partial', aliases: ['historical-alias'] })], { initialization: true })
     const registry = first.registry as Registry
     registry.reservedIds.push('puzzle-000002')
     registry.reservedAliases.push('reserved-alias')
@@ -179,7 +190,7 @@ describe('incremental historical registry', () => {
     expect(next.registry?.identities.some((identity) => identity.publicId === 'puzzle-000003')).toBe(true)
 
     const exhausted: Registry = { ...init(), reservedIds: Array.from({ length: 999999 }, (_, index) => `puzzle-${String(index + 1).padStart(6, '0')}`) }
-    const result = assignIncremental(exhausted, [input(key('feed', 'exhausted'), fp('5'))], {})
+    const result = assignIncremental(exhausted, [input(key('feed', 'exhausted'), fp('5'))], { initialization: true })
     expect(result.registry).toBeNull()
     expect(result.observations).toEqual([])
     expect(result.diagnostics[0].code).toBe('id-exhausted')
