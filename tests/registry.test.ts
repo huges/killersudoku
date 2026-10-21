@@ -247,46 +247,57 @@ describe('incremental historical registry', () => {
 
   it('rejects sparse and explicitly undefined nested arrays before validation can skip elements', () => {
     const base = assignIncremental(init(), [input(key('feed', 'nested-arrays'), fp('c'), { aliases: ['known'] })], { initialization: true })
+    expect(base.diagnostics).toEqual([])
+    expect(base.registry).not.toBeNull()
     const registry = base.registry as Registry
 
-    const cases: Array<(candidate: Registry) => void> = [
-      (candidate) => { candidate.identities[0].fingerprints = new Array(2) as Array<never>; candidate.identities[0].fingerprints[1] = fp('d') as never },
-      (candidate) => { candidate.identities[0].aliases = new Array(2) as Array<never>; candidate.identities[0].aliases[1] = 'known' as never },
-      (candidate) => { candidate.identities[0].fingerprints = [undefined as never] },
-      (candidate) => { candidate.identities[0].aliases = [undefined as never] },
+    const cases: Array<{ mutate: (candidate: Registry) => unknown[]; present: number[]; absent: number[] }> = [
+      { mutate: (candidate) => { candidate.identities[0].fingerprints = new Array(2) as Array<never>; candidate.identities[0].fingerprints[1] = fp('d') as never; return candidate.identities[0].fingerprints }, present: [1], absent: [0] },
+      { mutate: (candidate) => { candidate.identities[0].aliases = new Array(2) as Array<never>; candidate.identities[0].aliases[1] = 'known' as never; return candidate.identities[0].aliases }, present: [1], absent: [0] },
+      { mutate: (candidate) => { candidate.identities[0].fingerprints = [undefined as never]; return candidate.identities[0].fingerprints }, present: [0], absent: [] },
+      { mutate: (candidate) => { candidate.identities[0].aliases = [undefined as never]; return candidate.identities[0].aliases }, present: [0], absent: [] },
     ]
 
-    for (const mutate of cases) {
+    for (const testCase of cases) {
       const malformed = structuredClone(registry) as Registry
-      mutate(malformed)
+      const array = testCase.mutate(malformed)
       const before = structuredClone(malformed)
-      expect(() => assignIncremental(malformed, [], {})).not.toThrow()
+      expect(testCase.present.every((index) => index in array)).toBe(true)
+      expect(testCase.absent.every((index) => !(index in array))).toBe(true)
       const result = assignIncremental(malformed, [], {})
       expect(result.registry).toBeNull()
       expect(result.observations).toEqual([])
       expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
       expect(malformed).toEqual(before)
+      expect(testCase.present.every((index) => index in array)).toBe(true)
+      expect(testCase.absent.every((index) => !(index in array))).toBe(true)
     }
 
-    const inputCases: AssignmentInput[] = [
-      input(key('feed', 'sparse-input'), fp('e'), { aliases: Object.assign(new Array(2), { 1: 'alias' }) as string[] }),
-      input(key('feed', 'mixed-input'), fp('f'), { aliases: Object.assign(['alias'], { length: 2 }) as string[] }),
-      input(key('feed', 'undefined-input'), fp('g'), { aliases: [undefined as never] }),
+    const inputCases: Array<{ candidate: AssignmentInput; present: number[]; absent: number[] }> = [
+      { candidate: input(key('feed', 'sparse-input'), fp('e'), { aliases: Object.assign(new Array(2), { 1: 'alias' }) as string[] }), present: [1], absent: [0] },
+      { candidate: input(key('feed', 'mixed-input'), fp('f'), { aliases: Object.assign(['alias'], { length: 2 }) as string[] }), present: [0], absent: [1] },
+      { candidate: input(key('feed', 'undefined-input'), fp('g'), { aliases: [undefined as never] }), present: [0], absent: [] },
     ]
-    for (const candidate of inputCases) {
+    for (const testCase of inputCases) {
+      const { candidate } = testCase
       const before = structuredClone(candidate)
+      expect(testCase.present.every((index) => index in candidate.aliases)).toBe(true)
+      expect(testCase.absent.every((index) => !(index in candidate.aliases))).toBe(true)
       expect(() => assignIncremental(init(), [candidate], { initialization: true })).not.toThrow()
       const result = assignIncremental(init(), [candidate], { initialization: true })
       expect(result.registry).toBeNull()
       expect(result.observations).toEqual([])
       expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
       expect(candidate).toEqual(before)
-      if (candidate.aliases.length === 2) expect(0 in candidate.aliases).toBe(true)
+      expect(testCase.present.every((index) => index in candidate.aliases)).toBe(true)
+      expect(testCase.absent.every((index) => !(index in candidate.aliases))).toBe(true)
     }
   })
 
   it('rejects sparse and explicitly undefined reservation arrays atomically', () => {
-    const base = assignIncremental(init(), [input(key('feed', 'reservation-boundary'), fp('h'))], { initialization: true })
+    const base = assignIncremental(init(), [input(key('feed', 'reservation-boundary'), fp('8'))], { initialization: true })
+    expect(base.diagnostics).toEqual([])
+    expect(base.registry).not.toBeNull()
     const registry = base.registry as Registry
 
     const cases: Array<(candidate: Registry) => { array: string[]; missingIndex: number }> = [
