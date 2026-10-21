@@ -182,6 +182,69 @@ describe('incremental historical registry', () => {
     expect(0 in sparseHistory).toBe(false)
   })
 
+  it('rejects malformed identities and associations atomically, including sparse arrays', () => {
+    const base = assignIncremental(init(), [input(key('feed', 'structural-boundary'), fp('b'))], { initialization: true })
+    const registry = base.registry as Registry
+
+    const identityCases: unknown[] = [
+      null,
+      undefined,
+      { publicId: registry.identities[0].publicId },
+      { ...registry.identities[0], firstAssignment: null },
+    ]
+    for (const entry of identityCases) {
+      const malformed = structuredClone(registry) as Registry
+      malformed.identities = [entry as never]
+      const before = structuredClone(malformed)
+      expect(() => assignIncremental(malformed, [], {})).not.toThrow()
+      const result = assignIncremental(malformed, [], {})
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(malformed).toEqual(before)
+    }
+
+    const sparseIdentities = structuredClone(registry) as Registry
+    const missingIdentity = new Array(1) as Array<never>
+    sparseIdentities.identities = missingIdentity as never
+    const identitiesBefore = structuredClone(sparseIdentities)
+    const sparseIdentityResult = assignIncremental(sparseIdentities, [], {})
+    expect(sparseIdentityResult.registry).toBeNull()
+    expect(sparseIdentityResult.observations).toEqual([])
+    expect(sparseIdentityResult.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+    expect(sparseIdentities).toEqual(identitiesBefore)
+    expect(0 in missingIdentity).toBe(false)
+
+    const associationCases: unknown[] = [
+      null,
+      undefined,
+      { recordKey: registry.associations[0].recordKey },
+      { ...registry.associations[0], recordKey: null },
+    ]
+    for (const entry of associationCases) {
+      const malformed = structuredClone(registry) as Registry
+      malformed.associations = [entry as never]
+      const before = structuredClone(malformed)
+      expect(() => assignIncremental(malformed, [], {})).not.toThrow()
+      const result = assignIncremental(malformed, [], {})
+      expect(result.registry).toBeNull()
+      expect(result.observations).toEqual([])
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+      expect(malformed).toEqual(before)
+    }
+
+    const sparseAssociations = structuredClone(registry) as Registry
+    const missingAssociation = new Array(1) as Array<never>
+    sparseAssociations.associations = missingAssociation as never
+    const associationsBefore = structuredClone(sparseAssociations)
+    const sparseAssociationResult = assignIncremental(sparseAssociations, [], {})
+    expect(sparseAssociationResult.registry).toBeNull()
+    expect(sparseAssociationResult.observations).toEqual([])
+    expect(sparseAssociationResult.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-structure')).toBe(true)
+    expect(sparseAssociations).toEqual(associationsBefore)
+    expect(0 in missingAssociation).toBe(false)
+  })
+
   it('rejects invalid fingerprint contracts and malformed runtime structures before assignment', () => {
     const invalidFingerprint = assignIncremental(init(), [input(key('feed', 'bad'), { contract: 'playable-content-v1', kind: 'legacy', value: fp('a').value } as never)], { initialization: true })
     expect(invalidFingerprint.registry).toBeNull()

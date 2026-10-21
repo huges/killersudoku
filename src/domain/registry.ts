@@ -51,6 +51,28 @@ function validateRegistry(value: unknown): Diagnostic[] {
   const r = value as Registry
   if (r.schemaVersion !== '1' || r.namespace !== REGISTRY_NAMESPACE) errors.push(diagnostic('invalid-structure', 'previousRegistry', 'unsupported registry schema or namespace'))
   if (!Array.isArray(r.identities) || !Array.isArray(r.associations) || !Array.isArray(r.reservedIds) || !Array.isArray(r.reservedAliases)) return errors.concat(diagnostic('invalid-structure', 'previousRegistry', 'registry arrays are required'))
+
+  // Establish the complete structural boundary before building any indexes.  In particular,
+  // indexed iteration preserves sparse-array holes instead of silently skipping them.
+  for (let index = 0; index < r.identities.length; index += 1) {
+    if (!(index in r.identities)) { errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}]`, 'identity history element is missing')); continue }
+    const identity = r.identities[index]
+    if (!exact(identity, ['publicId', 'firstAssignment', 'fingerprints', 'aliases', 'stateHistory', 'currentState', 'currentStateObservation']) || !exact(identity.firstAssignment, ['recordKey', 'observationKey']) || !validRecordKey(identity.firstAssignment?.recordKey) || typeof identity.firstAssignment?.observationKey !== 'string' || !Array.isArray(identity.fingerprints) || !Array.isArray(identity.aliases) || !Array.isArray(identity.stateHistory)) {
+      errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}]`, 'identity history element is invalid'))
+      continue
+    }
+    for (let stateIndex = 0; stateIndex < identity.stateHistory.length; stateIndex += 1) {
+      if (!(stateIndex in identity.stateHistory) || !exact(identity.stateHistory[stateIndex], ['state', 'observationKey']) || typeof identity.stateHistory[stateIndex].observationKey !== 'string') errors.push(diagnostic('invalid-structure', `previousRegistry.identities[${index}].stateHistory[${stateIndex}]`, 'state history element is invalid'))
+    }
+  }
+  for (let index = 0; index < r.associations.length; index += 1) {
+    if (!(index in r.associations)) { errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is missing')); continue }
+    const association = r.associations[index]
+    if (!exact(association, ['recordKey', 'publicId', 'observedPublicId', 'fingerprint', 'aliases', 'state', 'observationKey']) || !validRecordKey(association.recordKey) || !Array.isArray(association.aliases) || association.aliases.some((alias) => typeof alias !== 'string') || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}]`, 'association element is invalid'))
+    else for (let aliasIndex = 0; aliasIndex < association.aliases.length; aliasIndex += 1) if (!(aliasIndex in association.aliases)) errors.push(diagnostic('invalid-structure', `previousRegistry.associations[${index}].aliases[${aliasIndex}]`, 'association alias is missing'))
+  }
+  if (errors.length) return errors
+
   const ids = new Map<string, IdentityHistory>(); const fps = new Map<string, string>(); const aliases = new Map<string, string>(); const records = new Map<string, string>()
   const reservedIdValues = new Set<string>()
   for (const id of r.reservedIds) {
