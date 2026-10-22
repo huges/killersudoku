@@ -32,11 +32,17 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   for (const identity of registry.identities) {
     if (!validId(identity.publicId) || !validRecordKey(identity.firstAssignment.recordKey)) return { code: 'invalid-public-id', path: 'registry.identities', recordKeys: [], message: 'identity identifier is invalid' }
     if (ids.has(identity.publicId)) return { code: 'identity-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'public ID is duplicated' }; ids.add(identity.publicId)
+    const firstKey = recordText(identity.firstAssignment.recordKey)
+    const firstOwner = records.get(firstKey)
+    if (firstOwner && firstOwner !== identity.publicId) return { code: 'record-conflict', path: 'registry.identities.firstAssignment.recordKey', recordKeys: [identity.firstAssignment.recordKey], message: 'first-assignment RecordKey belongs to multiple identities' }
+    if (firstOwner === identity.publicId) return { code: 'record-conflict', path: 'registry.identities.firstAssignment.recordKey', recordKeys: [identity.firstAssignment.recordKey], message: 'first-assignment RecordKey is duplicated' }
+    records.set(firstKey, identity.publicId)
     for (const alias of identity.aliases) { if (!validAlias(alias)) return { code: 'invalid-alias', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'alias is invalid' }; const old = aliases.get(alias); if (old && old !== identity.publicId) return { code: 'alias-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'alias belongs to multiple identities' }; aliases.set(alias, identity.publicId) }
     for (const fingerprint of identity.fingerprints) { if (!validFingerprint(fingerprint)) return { code: 'invalid-fingerprint', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'fingerprint is malformed' }; const key = JSON.stringify(fingerprint); const old = fingerprints.get(key); if (old && old !== identity.publicId) return { code: 'fingerprint-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'fingerprint belongs to multiple identities' }; fingerprints.set(key, identity.publicId) }
   }
   for (const association of registry.associations) {
-    if (!validRecordKey(association.recordKey) || !validId(association.publicId)) return { code: 'invalid-input', path: 'registry.associations', recordKeys: validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier is invalid' }
+    if (!validRecordKey(association.recordKey) || !validId(association.publicId) || !Array.isArray(association.aliases) || typeof association.observationKey !== 'string' || (association.state !== 'current' && association.state !== 'removed') || (association.observedPublicId !== null && !validId(association.observedPublicId)) || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) return { code: 'invalid-input', path: 'registry.associations', recordKeys: validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier or fingerprint is invalid' }
+    if (association.aliases.some((alias) => !validAlias(alias))) return { code: 'invalid-alias', path: 'registry.associations.aliases', recordKeys: [association.recordKey], message: 'association alias is invalid' }
     if (!ids.has(association.publicId)) return { code: 'unknown-reference', path: 'registry.associations.publicId', recordKeys: [association.recordKey], message: 'association references an unknown identity' }
     const key = recordText(association.recordKey); const old = records.get(key); if (old && old !== association.publicId) return { code: 'identity-conflict', path: 'registry.associations.recordKey', recordKeys: [association.recordKey], message: 'record is associated with multiple identities' }; records.set(key, association.publicId)
     const previous = observations.get(association.observationKey); if (previous && previous !== association.publicId) return { code: 'association-conflict', path: 'registry.associations.observationKey', recordKeys: [association.recordKey], message: 'observation is associated with multiple identities' }; observations.set(association.observationKey, association.publicId)
@@ -82,12 +88,12 @@ export function classifyDuplicate(input: DuplicateInput): DuplicateResult {
   const equivalentPublicIds = [...new Set(matches.map((match) => match.publicId))].sort()
   const registered = input.registry.associations.find((association) => sameRecord(association.recordKey, observation))
   if (registered) {
-    const registeredMatches = matches.filter((match) => match.publicId === registered.publicId)
-    const selectedContradiction = explicit && input.requestedPublicId !== registered.publicId
-    const selectedMatch = explicit && matches.some((match) => sameRecord(match.recordKey, input.candidateRecordKey!) && match.publicId === input.requestedPublicId)
-    const registeredFingerprint = registered.fingerprint
-    const fingerprintCoherent = registeredFingerprint === null || registeredMatches.length > 0
-    if (selectedContradiction || (explicit && !selectedMatch) || !fingerprintCoherent || registeredMatches.length === 0) return error(observation, 'registered-association-conflict', 'registeredAssociation', 'registered association is inconsistent with content or selection', [registered.recordKey])
+    const registeredCandidate = (registered as Association & { candidateRecordKey?: RecordKey }).candidateRecordKey
+    const registeredMatch = registeredCandidate ? matches.find((match) => sameRecord(match.recordKey, registeredCandidate) && match.publicId === registered.publicId) : matches.find((match) => sameRecord(match.recordKey, registered.recordKey) && match.publicId === registered.publicId)
+    const selectedContradiction = explicit && (input.requestedPublicId !== registered.publicId || (registeredCandidate ? !sameRecord(input.candidateRecordKey!, registeredCandidate) : !sameRecord(input.candidateRecordKey!, registered.recordKey)))
+    const selectedMatch = explicit && registeredMatch !== undefined && sameRecord(registeredMatch.recordKey, input.candidateRecordKey!)
+    const fingerprintCoherent = registered.fingerprint === null || registeredMatch !== undefined
+    if (selectedContradiction || (explicit && !selectedMatch) || !fingerprintCoherent || registeredMatch === undefined) return error(observation, 'registered-association-conflict', 'registeredAssociation', 'registered association is inconsistent with content or selection', [registered.recordKey])
     return { classification: 'associazione già registrata', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), registeredAssociation: clone(registered), ...(explicit ? { requestedPublicId: input.requestedPublicId, candidateRecordKey: clone(input.candidateRecordKey) } : {}) }
   }
   if (explicit) {

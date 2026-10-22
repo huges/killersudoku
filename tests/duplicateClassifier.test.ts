@@ -25,7 +25,7 @@ function source(records: HistoricalRecord[]): { resolve: (key: RecordKey) => His
 
 describe('duplicate and historical association classification', () => {
   it('recognizes a new observation as a duplicate without requiring its record key in the registry', () => {
-    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) })
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content }]) })
     expect(result.classification).toBe('duplicato')
     expect(result.publicId).toBe('puzzle-1')
     expect(result.observationRecordKey).toEqual(observation)
@@ -58,11 +58,13 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('gives registered association precedence and blocks contradictory selection', () => {
-    const associations = [{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-1' }]
-    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(associations), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) }
-    expect(classifyDuplicate(input).classification).toBe('errore bloccante')
+    const associations = [{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-1', candidateRecordKey: first }]
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(associations), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content }, { recordKey: observation, publicId: 'puzzle-1', content }]) }
+    expect(classifyDuplicate(input).classification).toBe('associazione già registrata')
     const coherent = classifyDuplicate({ ...input, requestedPublicId: 'puzzle-1', candidateRecordKey: first })
     expect(coherent.classification).toBe('associazione già registrata')
+    const wrongEquivalentRecord = classifyDuplicate({ ...input, requestedPublicId: 'puzzle-1', candidateRecordKey: second })
+    expect(wrongEquivalentRecord.diagnostic?.code).toBe('registered-association-conflict')
     const contradictory = classifyDuplicate({ ...input, requestedPublicId: 'puzzle-2', candidateRecordKey: second })
     expect(contradictory.diagnostic?.code).toBe('registered-association-conflict')
   })
