@@ -1,0 +1,103 @@
+import { canonicalizePlayableContent, transformPlayableContent, type PlayableContent, type D4Transformation } from './identity'
+import { type Association, type FingerprintRef, type RecordKey, type Registry } from './registry'
+
+export const DUPLICATE_CLASSIFICATION_ALGORITHM = 'd4-v1' as const
+export type DuplicateClassification = 'nuovo contenuto' | 'duplicato' | 'associazione proposta verificata' | 'associazione già registrata' | 'ambiguità' | 'errore bloccante'
+
+export type HistoricalRecord = { recordKey: RecordKey; publicId: string; content: PlayableContent; references?: readonly string[] }
+export type HistoricalContentSource = { resolve: (recordKey: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous' }
+export type DuplicateInput = { namespace: 'killer-sudoku'; observationRecordKey: RecordKey; content: PlayableContent; registry: Registry; historicalContentSource: HistoricalContentSource; requestedPublicId?: string; candidateRecordKey?: RecordKey }
+export type DuplicateDiagnostic = { code: string; path: string; recordKeys: RecordKey[]; message: string }
+export type DuplicateMatch = { recordKey: RecordKey; publicId: string; transformations: string[] }
+export type DuplicateResult = { classification: DuplicateClassification; algorithmVersion: typeof DUPLICATE_CLASSIFICATION_ALGORITHM; observationRecordKey: RecordKey; requestedPublicId?: string; registeredAssociation?: Association; candidateRecordKey?: RecordKey; publicId?: string; matches?: DuplicateMatch[]; equivalentPublicIds?: string[]; diagnostic?: DuplicateDiagnostic }
+
+const recordPattern = /^[A-Za-z0-9._/-]+$/
+const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
+const aliasPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const fingerprintPattern = /^sha256-[0-9a-f]{64}$/
+const transformations = ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal'] as const
+const clone = <T>(value: T): T => structuredClone(value)
+const recordText = (key: RecordKey): string => JSON.stringify([key.source, key.key])
+const sameRecord = (left: RecordKey, right: RecordKey): boolean => recordText(left) === recordText(right)
+const sortRecords = (keys: RecordKey[]): RecordKey[] => keys.map(clone).sort((a, b) => recordText(a).localeCompare(recordText(b)))
+const error = (observationRecordKey: RecordKey, code: string, path: string, message: string, recordKeys: RecordKey[] = []): DuplicateResult => ({ classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observationRecordKey), diagnostic: { code, path, recordKeys: sortRecords(recordKeys), message } })
+const validRecordKey = (value: unknown): value is RecordKey => typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 2 && typeof (value as RecordKey).source === 'string' && typeof (value as RecordKey).key === 'string' && recordPattern.test((value as RecordKey).source) && recordPattern.test((value as RecordKey).key)
+const validId = (value: unknown): value is string => typeof value === 'string' && idPattern.test(value)
+const validAlias = (value: unknown): value is string => typeof value === 'string' && aliasPattern.test(value)
+const validFingerprint = (value: unknown): value is FingerprintRef => typeof value === 'object' && value !== null && Object.keys(value).length === 3 && (value as FingerprintRef).contract === 'playable-content-v1' && (value as FingerprintRef).kind === 'current' && typeof (value as FingerprintRef).value === 'string' && fingerprintPattern.test((value as FingerprintRef).value) || typeof value === 'object' && value !== null && Object.keys(value).length === 3 && (value as FingerprintRef).contract === 'legacy-sha256' && (value as FingerprintRef).kind === 'legacy' && typeof (value as FingerprintRef).value === 'string' && fingerprintPattern.test((value as FingerprintRef).value)
+
+function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
+  if (registry.schemaVersion !== '1' || registry.namespace !== 'killer-sudoku' || !Array.isArray(registry.identities) || !Array.isArray(registry.associations)) return { code: 'invalid-input', path: 'registry', recordKeys: [], message: 'registry structure or namespace is invalid' }
+  const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const observations = new Map<string, string>()
+  for (const identity of registry.identities) {
+    if (!validId(identity.publicId) || !validRecordKey(identity.firstAssignment.recordKey)) return { code: 'invalid-public-id', path: 'registry.identities', recordKeys: [], message: 'identity identifier is invalid' }
+    if (ids.has(identity.publicId)) return { code: 'identity-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'public ID is duplicated' }; ids.add(identity.publicId)
+    for (const alias of identity.aliases) { if (!validAlias(alias)) return { code: 'invalid-alias', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'alias is invalid' }; const old = aliases.get(alias); if (old && old !== identity.publicId) return { code: 'alias-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'alias belongs to multiple identities' }; aliases.set(alias, identity.publicId) }
+    for (const fingerprint of identity.fingerprints) { if (!validFingerprint(fingerprint)) return { code: 'invalid-fingerprint', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'fingerprint is malformed' }; const key = JSON.stringify(fingerprint); const old = fingerprints.get(key); if (old && old !== identity.publicId) return { code: 'fingerprint-conflict', path: 'registry.identities', recordKeys: [identity.firstAssignment.recordKey], message: 'fingerprint belongs to multiple identities' }; fingerprints.set(key, identity.publicId) }
+  }
+  for (const association of registry.associations) {
+    if (!validRecordKey(association.recordKey) || !validId(association.publicId)) return { code: 'invalid-input', path: 'registry.associations', recordKeys: validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier is invalid' }
+    if (!ids.has(association.publicId)) return { code: 'unknown-reference', path: 'registry.associations.publicId', recordKeys: [association.recordKey], message: 'association references an unknown identity' }
+    const key = recordText(association.recordKey); const old = records.get(key); if (old && old !== association.publicId) return { code: 'identity-conflict', path: 'registry.associations.recordKey', recordKeys: [association.recordKey], message: 'record is associated with multiple identities' }; records.set(key, association.publicId)
+    const previous = observations.get(association.observationKey); if (previous && previous !== association.publicId) return { code: 'association-conflict', path: 'registry.associations.observationKey', recordKeys: [association.recordKey], message: 'observation is associated with multiple identities' }; observations.set(association.observationKey, association.publicId)
+  }
+  return null
+}
+
+function allHistoricalKeys(registry: Registry): RecordKey[] {
+  const values = [...registry.identities.map((identity) => identity.firstAssignment.recordKey), ...registry.associations.map((association) => association.recordKey)]
+  return [...new Map(values.map((key) => [recordText(key), clone(key)])).values()].sort((a, b) => recordText(a).localeCompare(recordText(b)))
+}
+
+export function classifyDuplicate(input: DuplicateInput): DuplicateResult {
+  const observation = input?.observationRecordKey
+  if (!validRecordKey(observation)) return error(observation ?? { source: '', key: '' }, 'invalid-record-key', 'observationRecordKey', 'observationRecordKey is required and invalid')
+  if (!input || input.namespace !== 'killer-sudoku') return error(observation, 'invalid-input', 'namespace', 'namespace must be killer-sudoku')
+  const explicit = input.requestedPublicId !== undefined || input.candidateRecordKey !== undefined
+  if (explicit && (!validId(input.requestedPublicId) || !validRecordKey(input.candidateRecordKey))) return error(observation, 'invalid-input', 'selection', 'requestedPublicId and candidateRecordKey must be supplied together and valid')
+  try { canonicalizePlayableContent(input.content) } catch { return error(observation, 'invalid-input', 'content', 'observed PlayableContent is invalid') }
+  const registryError = diagnosticForRegistry(input.registry); if (registryError) return { classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), diagnostic: registryError }
+  const matches: DuplicateMatch[] = []
+  for (const key of allHistoricalKeys(input.registry)) {
+    let resolved: HistoricalRecord | 'missing' | 'ambiguous'
+    try { resolved = input.historicalContentSource.resolve(clone(key)) } catch { resolved = 'ambiguous' }
+    if (resolved === 'missing') return error(observation, 'missing-historical-content', 'historicalContentSource', 'historical content is missing', [key])
+    if (resolved === 'ambiguous' || !resolved || !sameRecord(resolved.recordKey, key) || !validId(resolved.publicId)) return error(observation, resolved === 'ambiguous' ? 'ambiguous-historical-reference' : 'unknown-reference', 'historicalContentSource', 'historical record cannot be associated unambiguously', [key])
+    if (!input.registry.identities.some((identity) => identity.publicId === resolved.publicId)) return error(observation, 'unknown-reference', 'historicalContentSource.publicId', 'historical record references an unknown public ID', [key])
+    const owningIdentity = input.registry.identities.find((identity) => sameRecord(identity.firstAssignment.recordKey, key))
+    const owningAssociation = input.registry.associations.find((association) => sameRecord(association.recordKey, key))
+    const owners = new Set([...(owningIdentity ? [owningIdentity.publicId] : []), ...(owningAssociation ? [owningAssociation.publicId] : [])])
+    if (owners.size > 0 && (owners.size !== 1 || !owners.has(resolved.publicId))) return error(observation, 'identity-conflict', 'historicalContentSource.publicId', 'historical record public ID conflicts with registry ownership', [key])
+    try { canonicalizePlayableContent(resolved.content) } catch { return error(observation, 'invalid-historical-content', 'historicalContentSource.content', 'historical PlayableContent is invalid', [key]) }
+    const equivalentTransformations = transformations.filter((transformation) => {
+      try {
+        return canonicalizePlayableContent(transformPlayableContent(input.content, transformation as D4Transformation)) === canonicalizePlayableContent(resolved.content)
+      } catch {
+        return false
+      }
+    })
+    if (equivalentTransformations.length > 0) matches.push({ recordKey: clone(key), publicId: resolved.publicId, transformations: equivalentTransformations })
+  }
+  matches.sort((a, b) => recordText(a.recordKey).localeCompare(recordText(b.recordKey)))
+  const equivalentPublicIds = [...new Set(matches.map((match) => match.publicId))].sort()
+  const registered = input.registry.associations.find((association) => sameRecord(association.recordKey, observation))
+  if (registered) {
+    const registeredMatches = matches.filter((match) => match.publicId === registered.publicId)
+    const selectedContradiction = explicit && input.requestedPublicId !== registered.publicId
+    const selectedMatch = explicit && matches.some((match) => sameRecord(match.recordKey, input.candidateRecordKey!) && match.publicId === input.requestedPublicId)
+    const registeredFingerprint = registered.fingerprint
+    const fingerprintCoherent = registeredFingerprint === null || registeredMatches.length > 0
+    if (selectedContradiction || (explicit && !selectedMatch) || !fingerprintCoherent || registeredMatches.length === 0) return error(observation, 'registered-association-conflict', 'registeredAssociation', 'registered association is inconsistent with content or selection', [registered.recordKey])
+    return { classification: 'associazione già registrata', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), registeredAssociation: clone(registered), ...(explicit ? { requestedPublicId: input.requestedPublicId, candidateRecordKey: clone(input.candidateRecordKey) } : {}) }
+  }
+  if (explicit) {
+    const candidate = matches.find((match) => sameRecord(match.recordKey, input.candidateRecordKey!))
+    if (!input.registry.identities.some((identity) => identity.publicId === input.requestedPublicId)) return error(observation, 'unknown-requested-public-id', 'requestedPublicId', 'requested public ID does not exist')
+    if (!candidate) return error(observation, 'candidate-not-equivalent', 'candidateRecordKey', 'candidate is not D4-equivalent', [input.candidateRecordKey!])
+    if (candidate.publicId !== input.requestedPublicId) return error(observation, 'candidate-identity-mismatch', 'candidateRecordKey', 'candidate belongs to another identity', [input.candidateRecordKey!])
+    return { classification: 'associazione proposta verificata', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), requestedPublicId: input.requestedPublicId, candidateRecordKey: clone(input.candidateRecordKey) }
+  }
+  if (equivalentPublicIds.length === 0) return { classification: 'nuovo contenuto', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation) }
+  if (equivalentPublicIds.length === 1) return { classification: 'duplicato', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), publicId: equivalentPublicIds[0], matches: matches.map(clone) }
+  return { classification: 'ambiguità', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), matches: matches.map(clone), equivalentPublicIds }
+}
