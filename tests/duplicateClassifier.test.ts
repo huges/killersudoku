@@ -217,16 +217,47 @@ describe('duplicate and historical association classification', () => {
 
   function sourceFor(registryValue: Registry, historicalContent: PlayableContent = content): { records: HistoricalRecord[]; source: { resolve: (key: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous' } } {
     const recordsByKey = new Map<string, HistoricalRecord>()
+    for (const identity of registryValue.identities) {
+      recordsByKey.set(JSON.stringify(identity.firstAssignment.recordKey), {
+        recordKey: structuredClone(identity.firstAssignment.recordKey),
+        publicId: identity.publicId,
+        content: historicalContent,
+      })
+    }
     for (const association of registryValue.associations) {
-      recordsByKey.set(JSON.stringify(association.recordKey), { recordKey: structuredClone(association.recordKey), publicId: association.publicId, content: historicalContent })
+      recordsByKey.set(JSON.stringify(association.recordKey), {
+        recordKey: structuredClone(association.recordKey),
+        publicId: association.publicId,
+        content: historicalContent,
+      })
     }
     const recordsList = [...recordsByKey.values()]
     return { records: recordsList, source: source(recordsList) }
   }
 
+  function expectSourceCoverage(registryValue: Registry, historical: ReturnType<typeof sourceFor>): void {
+    const required = new Set(registryValue.identities.map((identity) => JSON.stringify(identity.firstAssignment.recordKey)))
+    for (const association of registryValue.associations) required.add(JSON.stringify(association.recordKey))
+    const resolvable = new Set(historical.records.map((record) => JSON.stringify(record.recordKey)))
+    expect(historical.records).toHaveLength(resolvable.size)
+    expect([...required].sort()).toEqual([...resolvable].sort())
+    for (const record of historical.records) {
+      const key = JSON.stringify(record.recordKey)
+      const identityOwner = registryValue.identities.find((identity) => JSON.stringify(identity.firstAssignment.recordKey) === key)?.publicId
+      const associationOwner = registryValue.associations.find((association) => JSON.stringify(association.recordKey) === key)?.publicId
+      expect([identityOwner, associationOwner].filter((owner): owner is string => owner !== undefined)).toContain(record.publicId)
+      expect(historical.source.resolve(structuredClone(record.recordKey))).toEqual(record)
+    }
+    for (const key of required) {
+      const parsed = JSON.parse(key) as RecordKey
+      expect(historical.source.resolve(parsed)).not.toBe('missing')
+    }
+  }
+
   it('classifies a first assignment registry built by assignIncremental and preserves registry and source data', () => {
     const built = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'first' }, content, aliases: ['first-alias'], state: 'current' }], true)
     const historical = sourceFor(built)
+    expectSourceCoverage(built, historical)
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: built, historicalContentSource: historical.source }
     const registryBefore = structuredClone(built)
     const recordsBefore = structuredClone(historical.records)
@@ -239,9 +270,12 @@ describe('duplicate and historical association classification', () => {
     const firstAssignment = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'one' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }], true)
     const cumulative = assigned(firstAssignment, [{ recordKey: { source: 'integration', key: 'two' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }])
     const historical = sourceFor(cumulative)
+    expectSourceCoverage(cumulative, historical)
     const before = structuredClone(cumulative)
+    const sourceBefore = structuredClone(historical.records)
     expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: cumulative, historicalContentSource: historical.source }).classification).toBe('duplicato')
     expect(cumulative).toEqual(before)
+    expect(historical.records).toEqual(sourceBefore)
   })
 
   it('accepts legitimate alias and fingerprint recurrences and the A-current/B-removed/A-current sequence', () => {
