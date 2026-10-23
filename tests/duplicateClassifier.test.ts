@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { partialPuzzle } from '../src/domain/fixtures'
 import { extractPlayableContent, transformPlayableContent, type PlayableContent } from '../src/domain/identity'
 import { classifyDuplicate, type HistoricalRecord } from '../src/domain/duplicateClassifier'
-import type { RecordKey, Registry } from '../src/domain/registry'
+import { assignIncremental, createEmptyRegistry, type AssignmentInput, type RecordKey, type Registry } from '../src/domain/registry'
 
 const content = extractPlayableContent(partialPuzzle)
 const first: RecordKey = { source: 'catalog', key: 'one' }
@@ -206,5 +206,65 @@ describe('duplicate and historical association classification', () => {
     expect(classifyDuplicate(input).diagnostic?.code).toBe('identity-conflict')
     expect(input).toEqual(before)
     expect(classifyDuplicate({ ...input, content: { invalid: true } as never }).diagnostic?.code).toBe('invalid-input')
+  })
+
+  function assigned(previous: Registry, inputs: AssignmentInput[], initialization = false): Registry {
+    const result = assignIncremental(previous, inputs, initialization ? { initialization: true } : {})
+    expect(result.diagnostics).toEqual([])
+    expect(result.registry).not.toBeNull()
+    return result.registry as Registry
+  }
+
+  function sourceFor(registryValue: Registry, historicalContent: PlayableContent = content): { records: HistoricalRecord[]; source: { resolve: (key: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous' } } {
+    const recordsByKey = new Map<string, HistoricalRecord>()
+    for (const association of registryValue.associations) {
+      recordsByKey.set(JSON.stringify(association.recordKey), { recordKey: structuredClone(association.recordKey), publicId: association.publicId, content: historicalContent })
+    }
+    const recordsList = [...recordsByKey.values()]
+    return { records: recordsList, source: source(recordsList) }
+  }
+
+  it('classifies a first assignment registry built by assignIncremental and preserves registry and source data', () => {
+    const built = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'first' }, content, aliases: ['first-alias'], state: 'current' }], true)
+    const historical = sourceFor(built)
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: built, historicalContentSource: historical.source }
+    const registryBefore = structuredClone(built)
+    const recordsBefore = structuredClone(historical.records)
+    expect(classifyDuplicate(input).classification).toBe('duplicato')
+    expect(built).toEqual(registryBefore)
+    expect(historical.records).toEqual(recordsBefore)
+  })
+
+  it('accepts cumulative associations for one identity when the registry is built incrementally', () => {
+    const firstAssignment = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'one' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }], true)
+    const cumulative = assigned(firstAssignment, [{ recordKey: { source: 'integration', key: 'two' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }])
+    const historical = sourceFor(cumulative)
+    const before = structuredClone(cumulative)
+    expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: cumulative, historicalContentSource: historical.source }).classification).toBe('duplicato')
+    expect(cumulative).toEqual(before)
+  })
+
+  it('accepts legitimate alias and fingerprint recurrences and the A-current/B-removed/A-current sequence', () => {
+    const first = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'a' }, content, aliases: ['recurring'], state: 'current' }], true)
+    const removed = assigned(first, [{ recordKey: { source: 'integration', key: 'b' }, content, aliases: ['recurring'], state: 'removed' }])
+    const reactivated = assigned(removed, [{ recordKey: { source: 'integration', key: 'a' }, content, aliases: ['recurring'], state: 'current' }])
+    const historical = sourceFor(reactivated)
+    const registryBefore = structuredClone(reactivated)
+    const recordsBefore = structuredClone(historical.records)
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: reactivated, historicalContentSource: historical.source })
+    expect(result.classification).toBe('duplicato')
+    expect(reactivated).toEqual(registryBefore)
+    expect(historical.records).toEqual(recordsBefore)
+  })
+
+  it('accepts a registry with owner-consistent reservations built through assignIncremental', () => {
+    const seeded = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'owner' }, content, publicId: 'puzzle-000001', aliases: ['owned-alias'], state: 'current' }], true)
+    seeded.reservedIds = ['puzzle-000002']
+    seeded.reservedAliases = ['reserved-alias']
+    const built = assigned(seeded, [{ recordKey: { source: 'integration', key: 'next' }, content, aliases: [], state: 'current' }])
+    const historical = sourceFor(built)
+    expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: built, historicalContentSource: historical.source }).classification).toBe('duplicato')
+    expect(built.reservedIds).toEqual(['puzzle-000002'])
+    expect(built.reservedAliases).toEqual(['reserved-alias'])
   })
 })
