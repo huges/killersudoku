@@ -34,15 +34,17 @@ La matrice seguente distingue il requisito obbligatorio dalla regressione effett
 
 | Requisito 708/709 | Test effettivo | Esito osservato in questa fase |
 |---|---|---|
-| Observation RecordKey obbligatoria e distinta; nuova chiave assente dal registro | `recognizes a new observation...`, `returns blocking diagnostics...` | Coperto; typecheck passato |
-| Fonte separata, contenuto storico mancante/invalido e riferimenti incoerenti | `blocks missing, invalid...`, `rejects malformed source references...`, `blocks malformed source responses...` | Coperto; typecheck passato |
-| Fingerprint sconosciuta/legacy opaca e chiavi canoniche | `accepts unknown and legacy fingerprints...` | Coperto; typecheck passato |
-| Tutte le otto trasformazioni D4 e contenuto completo | `recognizes every D4 transformation...` | Coperto; typecheck passato |
-| Duplicato con più record e ambiguità tra identità | `covers D4 and keeps multiple records...`, `recognizes a new observation...` | Coperto; typecheck passato |
-| Selezione proposta, candidato sconosciuto/foreign/non-equivalente e report limitato | `verifies an explicit proposal...`, `distinguishes unknown...`, `blocks non-equivalent...` | Coperto; typecheck passato |
-| Associazione già registrata, precedenza e conflitto | `gives registered association precedence...` | Coperto; typecheck passato |
-| Collisioni ID, alias, RecordKey, fingerprint e associazioni incompatibili, incluso association.recordKey contro firstAssignment.recordKey | `reports each required registry collision...`, `rejects an association RecordKey colliding with any first assignment` | Coperto; typecheck passato |
-| Input malformati, atomicità e immutabilità di successo/fallimento | `returns blocking diagnostics...`, `rejects malformed source references...`, `blocks non-equivalent...` | Coperto; typecheck passato |
+| observationRecordKey obbligatoria/assente e distinta dal public ID | `rejects missing and malformed observationRecordKey independently from content validation` | Test scritto; typecheck passato; Vitest al gate |
+| observationRecordKey malformata | `rejects missing and malformed observationRecordKey independently from content validation` | Test scritto; typecheck passato; Vitest al gate |
+| PlayableContent osservato invalido | `rejects an invalid observed content with a valid observationRecordKey` | Test scritto; typecheck passato; Vitest al gate |
+| Fonte separata, contenuto storico mancante/invalido e riferimenti incoerenti | `blocks missing, invalid...`, `rejects malformed source references...`, `blocks malformed source responses...` | Test scritto; typecheck passato; Vitest al gate; Vitest al gate |
+| Fingerprint sconosciuta/legacy opaca e chiavi canoniche | `accepts unknown and legacy fingerprints...` | Test scritto; typecheck passato; Vitest al gate; Vitest al gate |
+| Tutte le otto trasformazioni D4 e contenuto completo | `recognizes every D4 transformation...` | Test scritto; typecheck passato; Vitest al gate |
+| Duplicato con più record e ambiguità tra identità | `covers D4 and keeps multiple records...`, `recognizes a new observation...` | Test scritto; typecheck passato; Vitest al gate |
+| Selezione proposta, candidato sconosciuto/foreign/non-equivalente e report limitato | `verifies an explicit proposal...`, `distinguishes unknown...`, `blocks non-equivalent...` | Test scritto; typecheck passato; Vitest al gate |
+| Associazione già registrata, precedenza e conflitto | `gives registered association precedence...` | Test scritto; typecheck passato; Vitest al gate |
+| Collisioni ID, alias, RecordKey, fingerprint e associazioni incompatibili, incluso association.recordKey contro firstAssignment.recordKey | `reports each required registry collision...`, `rejects an association RecordKey colliding with any first assignment`, `rejects a reserved ID colliding with another identity`, `rejects duplicate association RecordKeys that do not collide with first assignments` | Test scritti; typecheck passato; Vitest al gate |
+| Input malformati, atomicità e immutabilità di successo/fallimento | `returns blocking diagnostics...`, `rejects malformed source references...`, `blocks non-equivalent...` | Test scritto; typecheck passato; Vitest al gate |
 | Diagnostica indipendente dall'ordine di identità, associazioni, reserved ID/alias, alias e fingerprint | `keeps the complete diagnostic stable...`, `makes association diagnostics invariant...`, `orders diagnostics...` | Coperto per i casi elencati; typecheck passato |
 | Registri validi costruiti tramite `assignIncremental`: prima assegnazione e associazioni cumulative | `classifies a first assignment registry built by assignIncremental...`, `accepts cumulative associations for one identity...` | Test scritto; non eseguito in questa fase |
 | Ricorrenze storiche legittime, riserve coerenti e sequenza A-current/B-removed/A-current | `accepts legitimate alias and fingerprint recurrences...`, `accepts a registry with owner-consistent reservations...` | Test scritto; non eseguito in questa fase |

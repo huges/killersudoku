@@ -316,4 +316,44 @@ describe('duplicate and historical association classification', () => {
     expect(built.reservedIds).toEqual(['puzzle-000002'])
     expect(built.reservedAliases).toEqual(['reserved-alias'])
   })
+
+  it('rejects missing and malformed observationRecordKey independently from content validation', () => {
+    const base = { namespace: 'killer-sudoku' as const, content, registry: registry(), historicalContentSource: source(records()) }
+    const missing = classifyDuplicate(base as never)
+    expect(missing.diagnostic?.code).toBe('invalid-input')
+    expect(missing.diagnostic?.path).toBe('observationRecordKey')
+
+    const malformed = classifyDuplicate({ ...base, observationRecordKey: { source: 'bad key!', key: 'new' } } as never)
+    expect(malformed.diagnostic?.code).toBe('invalid-record-key')
+    expect(malformed.diagnostic?.path).toBe('observationRecordKey')
+  })
+
+  it('rejects an invalid observed content with a valid observationRecordKey', () => {
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content: { invalid: true } as never, registry: registry(), historicalContentSource: source(records()) }
+    const result = classifyDuplicate(input)
+    expect(result.diagnostic?.code).toBe('invalid-input')
+    expect(result.diagnostic?.path).toBe('content')
+  })
+
+  it('rejects a reserved ID colliding with another identity', () => {
+    const malformed = registry()
+    malformed.reservedIds = ['puzzle-1']
+    const before = structuredClone(malformed)
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: malformed, historicalContentSource: source(records()) })
+    expect(result.diagnostic?.code).toBe('id-conflict')
+    expect(result.diagnostic?.path).toBe('registry.reservedIds')
+    expect(malformed).toEqual(before)
+  })
+
+  it('rejects duplicate association RecordKeys that do not collide with first assignments', () => {
+    const malformed = registry([
+      { recordKey: { source: 'association', key: 'one' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'incoming-one' },
+      { recordKey: { source: 'association', key: 'one' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'incoming-two' },
+    ])
+    const before = structuredClone(malformed)
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: malformed, historicalContentSource: source(records()) })
+    expect(result.diagnostic?.code).toBe('record-conflict')
+    expect(result.diagnostic?.path).toBe('registry.associations.recordKey')
+    expect(malformed).toEqual(before)
+  })
 })
