@@ -77,7 +77,7 @@ describe('duplicate and historical association classification', () => {
   it('recognizes every D4 transformation while comparing complete content', () => {
     for (const transformation of ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal'] as const) {
       const transformed = transformPlayableContent(content, transformation)
-      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformed, registry: registry({}), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) })
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformed, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) })
       expect(result.classification).toBe('duplicato')
       expect(result.matches?.[0].transformations).toContain(transformation)
     }
@@ -101,6 +101,41 @@ describe('duplicate and historical association classification', () => {
     expect(result.classification).toBe('associazione proposta verificata')
     expect(input).toEqual(before)
     expect(classifyDuplicate({ ...input, requestedPublicId: undefined }).diagnostic?.code).toBe('invalid-input')
+  })
+
+  it('returns blocking diagnostics instead of throwing for malformed registry structures', () => {
+    const base = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
+    expect(() => classifyDuplicate({ ...base, registry: null as never })).not.toThrow()
+    expect(classifyDuplicate({ ...base, registry: null as never }).classification).toBe('errore bloccante')
+
+    const missingAssignment = structuredClone(registry())
+    ;(missingAssignment.identities[0] as unknown as { firstAssignment?: unknown }).firstAssignment = undefined
+    expect(() => classifyDuplicate({ ...base, registry: missingAssignment })).not.toThrow()
+    expect(classifyDuplicate({ ...base, registry: missingAssignment }).classification).toBe('errore bloccante')
+
+    const nullAssociation = structuredClone(registry())
+    nullAssociation.associations = [null as never]
+    expect(() => classifyDuplicate({ ...base, registry: nullAssociation })).not.toThrow()
+    expect(classifyDuplicate({ ...base, registry: nullAssociation }).classification).toBe('errore bloccante')
+  })
+
+  it('keeps the complete diagnostic stable across permutations of all registry collections', () => {
+    const malformed = structuredClone(registry())
+    malformed.reservedIds = ['taken', 'taken']
+    malformed.reservedAliases = ['z-alias', 'z-alias']
+    malformed.identities[0].aliases = ['alias-b', 'alias-a']
+    malformed.identities[0].fingerprints = [
+      { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'b'.repeat(64)}` },
+      { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` },
+    ]
+    const permuted = structuredClone(malformed)
+    permuted.reservedIds.reverse()
+    permuted.reservedAliases.reverse()
+    permuted.identities.reverse()
+    permuted.identities[permuted.identities.length - 1].aliases.reverse()
+    permuted.identities[permuted.identities.length - 1].fingerprints.reverse()
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
+    expect(classifyDuplicate({ ...input, registry: malformed }).diagnostic).toEqual(classifyDuplicate({ ...input, registry: permuted }).diagnostic)
   })
 
   it('rejects incompatible and unknown historical references before classification', () => {

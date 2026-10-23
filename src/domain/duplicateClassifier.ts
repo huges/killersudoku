@@ -17,7 +17,7 @@ const aliasPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const fingerprintPattern = /^sha256-[0-9a-f]{64}$/
 const transformations = ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal'] as const
 const clone = <T>(value: T): T => structuredClone(value)
-const recordText = (key: RecordKey): string => JSON.stringify([key.source, key.key])
+const recordText = (key: RecordKey | null | undefined): string => JSON.stringify([key?.source ?? '', key?.key ?? ''])
 const sameRecord = (left: RecordKey, right: RecordKey): boolean => recordText(left) === recordText(right)
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0
 const sortRecords = (keys: RecordKey[]): RecordKey[] => keys.map(clone).sort((a, b) => compareText(recordText(a), recordText(b)))
@@ -35,12 +35,15 @@ const validFingerprint = (value: unknown): value is FingerprintRef => {
   const fingerprint = value as FingerprintRef
   return ((fingerprint.contract === 'playable-content-v1' && fingerprint.kind === 'current') || (fingerprint.contract === 'legacy-sha256' && fingerprint.kind === 'legacy')) && typeof fingerprint.value === 'string' && fingerprintPattern.test(fingerprint.value)
 }
-const fingerprintKey = (fingerprint: FingerprintRef): string => JSON.stringify({ contract: fingerprint.contract, kind: fingerprint.kind, value: fingerprint.value })
+const fingerprintKey = (fingerprint: FingerprintRef | unknown): string => {
+  if (!validFingerprint(fingerprint)) return stableValueText(fingerprint)
+  return JSON.stringify({ contract: fingerprint.contract, kind: fingerprint.kind, value: fingerprint.value })
+}
 const referencePattern = /^[A-Za-z0-9._/-]+$/
 const validReferences = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((reference) => typeof reference === 'string' && referencePattern.test(reference))
 const referenceFor = (key: RecordKey): string => `${key.source}/${key.key}`
 const referencesMatchRecord = (record: HistoricalRecord): boolean => record.references === undefined || record.references.includes(referenceFor(record.recordKey))
-const validAssociationShape = (association: Association): boolean => Array.isArray(association.aliases) && association.aliases.every(validAlias) && typeof association.observationKey === 'string' && (association.state === 'current' || association.state === 'removed')
+const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as HistoricalRecord
@@ -52,14 +55,16 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   if (registry === null || typeof registry !== 'object' || registry.schemaVersion !== '1' || registry.namespace !== 'killer-sudoku' || !Array.isArray(registry.identities) || !Array.isArray(registry.associations) || !Array.isArray(registry.reservedIds) || !Array.isArray(registry.reservedAliases)) return { code: 'invalid-input', path: 'registry', recordKeys: [], message: 'registry structure or namespace is invalid' }
   const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const observations = new Map<string, string>()
   const reservedIds = new Set<string>()
-  for (const [index, value] of registry.reservedIds.entries()) {
-    if (!validId(value)) return { code: 'invalid-public-id', path: `registry.reservedIds[${index}]`, recordKeys: [], message: 'reserved public ID is invalid' }
+  const reservedIdValues = [...registry.reservedIds].sort(compareText)
+  for (const value of reservedIdValues) {
+    if (!validId(value)) return { code: 'invalid-public-id', path: 'registry.reservedIds', recordKeys: [], message: 'reserved public ID is invalid' }
     if (reservedIds.has(value)) return { code: 'id-conflict', path: 'registry.reservedIds', recordKeys: [], message: 'reserved public ID is duplicated' }
     reservedIds.add(value)
   }
   const reservedAliases = new Set<string>()
-  for (const [index, value] of registry.reservedAliases.entries()) {
-    if (!validAlias(value)) return { code: 'invalid-alias', path: `registry.reservedAliases[${index}]`, recordKeys: [], message: 'reserved alias is invalid' }
+  const reservedAliasValues = [...registry.reservedAliases].sort(compareText)
+  for (const value of reservedAliasValues) {
+    if (!validAlias(value)) return { code: 'invalid-alias', path: 'registry.reservedAliases', recordKeys: [], message: 'reserved alias is invalid' }
     if (reservedAliases.has(value)) return { code: 'alias-conflict', path: 'registry.reservedAliases', recordKeys: [], message: 'reserved alias is duplicated' }
     reservedAliases.add(value)
   }
@@ -87,7 +92,11 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   for (const identity of [...registry.identities].sort((left, right) => compareText(String(left?.publicId), String(right?.publicId)))) {
     if (typeof identity.firstAssignment.observationKey !== 'string' || !validId(identity.currentStateObservation) || !['current', 'removed'].includes(identity.currentState as string) || identity.stateHistory.some((entry) => typeof entry !== 'object' || entry === null || typeof entry.observationKey !== 'string' || !['current', 'removed'].includes(entry.state as string))) return { code: 'invalid-input', path: 'registry.identities.stateHistory', recordKeys: [identity.firstAssignment.recordKey], message: 'identity state history is invalid' }
   }
-  for (const association of sortedAssociations(registry)) {    if (!validRecordKey(association.recordKey) || !validId(association.publicId) || !validAssociationShape(association) || (association.observedPublicId !== null && !validId(association.observedPublicId)) || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) return { code: 'invalid-input', path: 'registry.associations', recordKeys: validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier, aliases, state, or fingerprint is invalid' }
+  for (const association of registry.associations) {
+    if (typeof association !== 'object' || association === null || !validRecordKey(association.recordKey) || !validId(association.publicId) || !validAssociationShape(association) || (association.observedPublicId !== null && !validId(association.observedPublicId)) || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) return { code: 'invalid-input', path: 'registry.associations', recordKeys: typeof association === 'object' && association !== null && validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier, aliases, state, or fingerprint is invalid' }
+  }
+  for (const association of sortedAssociations(registry)) {
+    if (typeof association !== 'object' || association === null || !validRecordKey(association.recordKey) || !validId(association.publicId) || !validAssociationShape(association) || (association.observedPublicId !== null && !validId(association.observedPublicId)) || (association.fingerprint !== null && !validFingerprint(association.fingerprint))) return { code: 'invalid-input', path: 'registry.associations', recordKeys: typeof association === 'object' && association !== null && validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association identifier, aliases, state, or fingerprint is invalid' }
     if (!ids.has(association.publicId)) return { code: 'unknown-reference', path: 'registry.associations.publicId', recordKeys: [association.recordKey], message: 'association references an unknown identity' }
     const key = recordText(association.recordKey); const old = records.get(key); if (old && old !== association.publicId) return { code: 'identity-conflict', path: 'registry.associations.recordKey', recordKeys: [association.recordKey], message: 'record is associated with multiple identities' }; records.set(key, association.publicId)
     const previous = observations.get(association.observationKey); if (previous && previous !== association.publicId) return { code: 'association-conflict', path: 'registry.associations.observationKey', recordKeys: [association.recordKey], message: 'observation is associated with multiple identities' }; observations.set(association.observationKey, association.publicId)
@@ -115,7 +124,8 @@ export function classifyDuplicate(input: DuplicateInput): DuplicateResult {
   const explicit = input.requestedPublicId !== undefined || input.candidateRecordKey !== undefined
   if (explicit && (!validId(input.requestedPublicId) || !validRecordKey(input.candidateRecordKey))) return error(observation, 'invalid-input', 'selection', 'requestedPublicId and candidateRecordKey must be supplied together and valid')
   try { canonicalizePlayableContent(input.content) } catch { return error(observation, 'invalid-input', 'content', 'observed PlayableContent is invalid') }
-  const registryError = diagnosticForRegistry(input.registry); if (registryError) return { classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), diagnostic: registryError }
+  if (!input.historicalContentSource || typeof input.historicalContentSource !== 'object' || typeof input.historicalContentSource.resolve !== 'function') return error(observation, 'invalid-input', 'historicalContentSource', 'historicalContentSource.resolve must be callable')
+  const registryError = diagnosticForRegistry(input.registry); if (registryError) return { classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), diagnostic: firstDiagnostic([registryError]) }
   const matches: DuplicateMatch[] = []
   for (const key of allHistoricalKeys(input.registry)) {
     let resolved: HistoricalRecord | 'missing' | 'ambiguous'
