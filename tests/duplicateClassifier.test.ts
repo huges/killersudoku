@@ -73,4 +73,38 @@ describe('duplicate and historical association classification', () => {
     const other = { ...input, registry: b }
     expect(classifyDuplicate(input).diagnostic).toEqual(classifyDuplicate(other).diagnostic)
   })
+
+  it('recognizes every D4 transformation while comparing complete content', () => {
+    for (const transformation of ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal'] as const) {
+      const transformed = transformPlayableContent(content, transformation)
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformed, registry: registry({}), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) })
+      expect(result.classification).toBe('duplicato')
+      expect(result.matches?.[0].transformations).toContain(transformation)
+    }
+  })
+
+  it('accepts unknown and legacy fingerprints as opaque index values', () => {
+    const unknown = structuredClone(registry())
+    unknown.identities[0].fingerprints = [{ contract: 'playable-content-v1', kind: 'current', value: `sha256-${'f'.repeat(64)}` }]
+    const legacy = structuredClone(registry())
+    legacy.identities[0].fingerprints = [{ contract: 'legacy-sha256', kind: 'legacy', value: `sha256-${'e'.repeat(64)}` }]
+    for (const candidate of [unknown, legacy]) {
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: candidate, historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content: transformPlayableContent(content, 'rotate90') }]) })
+      expect(result.classification).toBe('ambiguità')
+    }
+  })
+
+  it('rejects incomplete explicit selections and keeps successful inputs immutable', () => {
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source(records()), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
+    const before = structuredClone(input)
+    const result = classifyDuplicate(input)
+    expect(result.classification).toBe('associazione proposta verificata')
+    expect(input).toEqual(before)
+    expect(classifyDuplicate({ ...input, requestedPublicId: undefined }).diagnostic?.code).toBe('invalid-input')
+  })
+
+  it('rejects incompatible and unknown historical references before classification', () => {
+    const bad = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one', 'catalog/missing'] }, { recordKey: second, publicId: 'puzzle-2', content }])
+    expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: bad }).diagnostic?.code).toBe('unknown-reference')
+  })
 })
