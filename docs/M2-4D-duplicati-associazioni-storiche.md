@@ -30,4 +30,19 @@ Ogni risultato positivo espone `algorithmVersion: "d4-v1"` e `observationRecordK
 
 ## Copertura verificata
 
-I test indipendenti coprono RecordKey obbligatoria e distinta dal public ID, nuova osservazione assente dal registro, fonte separata, contenuti storici mancanti/invalidi e riferimenti incoerenti, fingerprint sconosciute e legacy, tutte le otto trasformazioni D4 con contenuto completo, duplicati con più record, ambiguità tra identità, selezioni valide e rifiutate, associazioni già registrate, ID/alias/RecordKey/riferimenti sconosciuti, collisioni, input malformati senza eccezioni, immutabilità di successi e fallimenti, report limitato e permutazioni delle collezioni che dimostrano diagnostica deterministica.
+La matrice seguente distingue il requisito obbligatorio dalla regressione effettivamente presente in `tests/duplicateClassifier.test.ts`; l'esito indicato è quello verificato dal typecheck intermedio, mentre l'esecuzione Vitest resta al gate governato successivo.
+
+| Requisito 708/709 | Test effettivo | Esito osservato in questa fase |
+|---|---|---|
+| Observation RecordKey obbligatoria e distinta; nuova chiave assente dal registro | `recognizes a new observation...`, `returns blocking diagnostics...` | Coperto; typecheck passato |
+| Fonte separata, contenuto storico mancante/invalido e riferimenti incoerenti | `blocks missing, invalid...`, `rejects malformed source references...`, `blocks malformed source responses...` | Coperto; typecheck passato |
+| Fingerprint sconosciuta/legacy opaca e chiavi canoniche | `accepts unknown and legacy fingerprints...` | Coperto; typecheck passato |
+| Tutte le otto trasformazioni D4 e contenuto completo | `recognizes every D4 transformation...` | Coperto; typecheck passato |
+| Duplicato con più record e ambiguità tra identità | `covers D4 and keeps multiple records...`, `recognizes a new observation...` | Coperto; typecheck passato |
+| Selezione proposta, candidato sconosciuto/foreign/non-equivalente e report limitato | `verifies an explicit proposal...`, `distinguishes unknown...`, `blocks non-equivalent...` | Coperto; typecheck passato |
+| Associazione già registrata, precedenza e conflitto | `gives registered association precedence...` | Coperto; typecheck passato |
+| Collisioni ID, alias, RecordKey, fingerprint e associazioni incompatibili | `reports each required registry collision...` | Coperto; typecheck passato |
+| Input malformati, atomicità e immutabilità di successo/fallimento | `returns blocking diagnostics...`, `rejects malformed source references...`, `blocks non-equivalent...` | Coperto; typecheck passato |
+| Diagnostica indipendente dall'ordine di identità, associazioni, reserved ID/alias, alias e fingerprint | `keeps the complete diagnostic stable...`, `makes association diagnostics invariant...`, `orders diagnostics...` | Coperto; typecheck passato |
+
+Questi test non autorizzano scritture: verificano che registro, fonte e input restino invariati. I gate successivi devono eseguire Vitest, lint e build; questa fase dichiara soltanto il controllo `npm run typecheck` riuscito e non anticipa tali esiti.

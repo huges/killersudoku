@@ -138,8 +138,50 @@ describe('duplicate and historical association classification', () => {
     expect(classifyDuplicate({ ...input, registry: malformed }).diagnostic).toEqual(classifyDuplicate({ ...input, registry: permuted }).diagnostic)
   })
 
+  it('makes association diagnostics invariant under permutation of distinct invalid associations', () => {
+    const unknownIdentity = { recordKey: { source: 'catalog', key: 'z-association' }, publicId: 'missing-id', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-z' }
+    const malformedShape = { recordKey: { source: 'catalog', key: 'a-association' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: ['bad alias!'], state: 'current' as const, observationKey: 'incoming-a' }
+    const firstOrder = registry([unknownIdentity, malformedShape])
+    const secondOrder = registry([malformedShape, unknownIdentity])
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
+    const firstResult = classifyDuplicate({ ...input, registry: firstOrder })
+    const secondResult = classifyDuplicate({ ...input, registry: secondOrder })
+    expect(firstResult).toEqual(secondResult)
+    expect(firstResult.diagnostic).toMatchObject({ code: 'invalid-input', path: 'registry.associations' })
+  })
+
   it('rejects incompatible and unknown historical references before classification', () => {
     const bad = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one', 'catalog/missing'] }, { recordKey: second, publicId: 'puzzle-2', content }])
     expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: bad }).diagnostic?.code).toBe('unknown-reference')
+  })
+
+  it('blocks non-equivalent explicit candidates and keeps failed inputs immutable', () => {
+    const nonEquivalent = { ...content, clues: content.clues.map((clue) => ({ ...clue, value: clue.value === 1 ? 2 : 1 })) }
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content: nonEquivalent }]), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
+    const before = structuredClone(input)
+    expect(classifyDuplicate(input).diagnostic?.code).toBe('candidate-not-equivalent')
+    expect(input).toEqual(before)
+  })
+
+  it('blocks malformed source responses without throwing', () => {
+    const malformed = { resolve: () => ({ recordKey: first, publicId: 'puzzle-1', content: { malformed: true } } as never) }
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: malformed }
+    expect(() => classifyDuplicate(input)).not.toThrow()
+    expect(classifyDuplicate(input).diagnostic?.code).toBe('invalid-historical-content')
+  })
+
+  it('reports each required registry collision as a blocking diagnostic', () => {
+    const cases: Array<[string, (value: Registry) => void]> = [
+      ['identity-conflict', (value) => { value.identities.push(structuredClone(value.identities[0])) }],
+      ['alias-conflict', (value) => { value.identities[0].aliases = ['shared']; value.identities[1].aliases = ['shared'] }],
+      ['record-conflict', (value) => { value.identities[1].firstAssignment.recordKey = structuredClone(first) }],
+      ['fingerprint-conflict', (value) => { const fp = { contract: 'playable-content-v1' as const, kind: 'current' as const, value: `sha256-${'a'.repeat(64)}` }; value.identities[0].fingerprints = [fp]; value.identities[1].fingerprints = [fp] }],
+      ['association-conflict', (value) => { value.associations = [{ recordKey: first, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'same' }, { recordKey: second, publicId: 'puzzle-2', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'same' }] }],
+    ]
+    for (const [code, mutate] of cases) {
+      const malformed = registry()
+      mutate(malformed)
+      expect(classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: malformed, historicalContentSource: source([]) }).diagnostic?.code).toBe(code)
+    }
   })
 })
