@@ -185,6 +185,21 @@ describe('duplicate and historical association classification', () => {
     }
   })
 
+  it('rejects an association RecordKey colliding with any first assignment', () => {
+    const malformed = registry([{ recordKey: first, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'incoming-1' }])
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: malformed, historicalContentSource: source(records()) }
+    const before = structuredClone(input)
+    const result = classifyDuplicate(input)
+    expect(result.classification).toBe('errore bloccante')
+    expect(result.diagnostic).toEqual({ code: 'record-conflict', path: 'registry.associations.recordKey', recordKeys: [first], message: 'association RecordKey collides with a first-assignment RecordKey' })
+    expect(input).toEqual(before)
+
+    const permuted = structuredClone(malformed)
+    permuted.identities.reverse()
+    permuted.associations.reverse()
+    expect(classifyDuplicate({ ...input, registry: permuted }).diagnostic).toEqual(result.diagnostic)
+  })
+
   it('rejects association alias, fingerprint, reserved-id and observed-id inconsistencies deterministically', () => {
     const aliasCollision = registry([{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: 'puzzle-1', fingerprint: null, aliases: ['reserved'], state: 'current', observationKey: 'incoming-1' }])
     aliasCollision.reservedAliases = ['reserved']
