@@ -43,7 +43,7 @@ const referencePattern = /^[A-Za-z0-9._/-]+$/
 const validReferences = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((reference) => typeof reference === 'string' && referencePattern.test(reference))
 const referenceFor = (key: RecordKey): string => `${key.source}/${key.key}`
 const referencesMatchRecord = (record: HistoricalRecord): boolean => record.references === undefined || record.references.includes(referenceFor(record.recordKey))
-const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
+const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Object.keys(association).length === 7 && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as HistoricalRecord
@@ -53,7 +53,7 @@ const firstDiagnostic = (diagnostics: DuplicateDiagnostic[]): DuplicateDiagnosti
 
 function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   if (registry === null || typeof registry !== 'object' || registry.schemaVersion !== '1' || registry.namespace !== 'killer-sudoku' || !Array.isArray(registry.identities) || !Array.isArray(registry.associations) || !Array.isArray(registry.reservedIds) || !Array.isArray(registry.reservedAliases)) return { code: 'invalid-input', path: 'registry', recordKeys: [], message: 'registry structure or namespace is invalid' }
-  const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const observations = new Map<string, string>(); const associationObservations = new Map<string, { publicId: string; recordKey: RecordKey }>()
+  const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const observations = new Map<string, string>(); const associationObservations = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationRecords = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationAliases = new Map<string, string>()
   const reservedIds = new Set<string>()
   const reservedIdValues = [...registry.reservedIds].sort(compareText)
   for (const value of reservedIdValues) {
