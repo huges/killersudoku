@@ -60,6 +60,13 @@ describe('duplicate and historical association classification', () => {
     expect(result.diagnostic?.code).toBe('unknown-reference')
     expect(input).toEqual(before)
   })
+  it('rejects an existing but incoherent historical reference instead of accepting global membership', () => {
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/two'] }, { recordKey: second, publicId: 'puzzle-2', content, references: ['catalog/two'] }]) }
+    const before = structuredClone(input)
+    const result = classifyDuplicate(input)
+    expect(result.diagnostic).toEqual({ code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [first], message: 'historical references are malformed, unknown, or inconsistent with the record key' })
+    expect(input).toEqual(before)
+  })
   it('gives registered association precedence and reports a coherent explicit candidate', () => {
     const associations = [{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-1' }]
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(associations), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content }, { recordKey: observation, publicId: 'puzzle-1', content }]) }
