@@ -42,7 +42,6 @@ const fingerprintKey = (fingerprint: FingerprintRef | unknown): string => {
 const referencePattern = /^[A-Za-z0-9._/-]+$/
 const validReferences = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((reference) => typeof reference === 'string' && referencePattern.test(reference))
 const referenceFor = (key: RecordKey): string => `${key.source}/${key.key}`
-const referencesMatchRecord = (record: HistoricalRecord): boolean => record.references === undefined || record.references.includes(referenceFor(record.recordKey))
 const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Object.keys(association).length === 7 && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -148,7 +147,7 @@ export function classifyDuplicate(input: DuplicateInput): DuplicateResult {
     if (resolved === 'missing') return error(observation, 'missing-historical-content', 'historicalContentSource', 'historical content is missing', [key])
     if (resolved === 'ambiguous' || !resolved) return error(observation, resolved === 'ambiguous' ? 'ambiguous-historical-reference' : 'invalid-historical-content', 'historicalContentSource', 'historical record cannot be associated unambiguously', [key])
     if (!validHistoricalRecord(resolved) || !sameRecord(resolved.recordKey, key) || !validId(resolved.publicId)) return error(observation, 'invalid-historical-content', 'historicalContentSource', 'historical record structure is invalid', [key])
-    if (resolved.references !== undefined && (!validReferences(resolved.references) || !referencesMatchRecord(resolved) || resolved.references.some((reference) => !allHistoricalKeys(input.registry).some((historicalKey) => reference === referenceFor(historicalKey)))) ) return error(observation, 'unknown-reference', 'historicalContentSource.references', 'historical references are malformed, unknown, or inconsistent with the record key', [key])
+    if (resolved.references !== undefined && (!validReferences(resolved.references) || resolved.references.some((reference) => !allHistoricalKeys(input.registry).some((historicalKey) => reference === referenceFor(historicalKey)))) ) return error(observation, 'unknown-reference', 'historicalContentSource.references', 'historical references are malformed or unknown', [key])
     if (!input.registry.identities.some((identity) => identity.publicId === resolved.publicId)) return error(observation, 'unknown-reference', 'historicalContentSource.publicId', 'historical record references an unknown public ID', [key])
     const owningIdentity = input.registry.identities.find((identity) => sameRecord(identity.firstAssignment.recordKey, key))
     const owningAssociation = input.registry.associations.find((association) => sameRecord(association.recordKey, key))
