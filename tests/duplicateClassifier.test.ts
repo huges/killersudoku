@@ -78,7 +78,9 @@ describe('duplicate and historical association classification', () => {
   })
   it('gives registered association precedence and reports a coherent explicit candidate', () => {
     const associations = [{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-1' }]
-    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(associations), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content }, { recordKey: observation, publicId: 'puzzle-1', content }]) }
+    const coherentRegistry = registry(associations)
+    coherentRegistry.identities[0] = { ...coherentRegistry.identities[0], stateHistory: [{ state: 'current', observationKey: 'obs-1' }, { state: 'current', observationKey: 'incoming-1' }] }
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: coherentRegistry, historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-2', content }, { recordKey: observation, publicId: 'puzzle-1', content }]) }
     expect(classifyDuplicate(input).classification).toBe('associazione già registrata')
     expect(classifyDuplicate({ ...input, requestedPublicId: 'puzzle-1', candidateRecordKey: first })).toMatchObject({ classification: 'associazione già registrata', candidateRecordKey: first })
     expect(classifyDuplicate({ ...input, requestedPublicId: 'puzzle-2', candidateRecordKey: second }).diagnostic?.code).toBe('registered-association-conflict')
