@@ -119,7 +119,7 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
     }
     if (!history.some((entry) => entry.observationKey === identity.firstAssignment.observationKey)) return { code: 'identity-conflict', path: 'registry.identities.firstAssignment.observationKey', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'first assignment is absent from state history' }
     if (!history.some((entry) => entry.observationKey === identity.currentStateObservation)) return { code: 'identity-conflict', path: 'registry.identities.currentStateObservation', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'current state observation is absent from state history' }
-    for (const association of registry.associations.filter((candidate) => candidate?.publicId === identity.publicId)) {
+    for (const association of sortedAssociations(registry).filter((candidate) => candidate.publicId === identity.publicId)) {
       if (!history.some((entry) => entry.observationKey === association.observationKey && entry.state === association.state)) return { code: 'identity-conflict', path: 'registry.associations', recordKeys: validRecordKey(association.recordKey) ? [association.recordKey] : [], message: 'association is absent from state history' }
     }
   }

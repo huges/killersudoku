@@ -188,6 +188,18 @@ describe('duplicate and historical association classification', () => {
     expect(firstResult.diagnostic).toMatchObject({ code: 'invalid-input', path: 'registry.associations', recordKeys: [{ source: 'catalog', key: 'a-malformed' }] })
   })
 
+  it('makes state-history association diagnostics invariant under permutation of valid incoherent associations', () => {
+    const missingA = { recordKey: { source: 'catalog', key: 'a-missing' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'missing-a' }
+    const missingB = { recordKey: { source: 'catalog', key: 'b-missing' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'missing-b' }
+    const firstOrder = registry([missingB, missingA])
+    const secondOrder = registry([missingA, missingB])
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
+    const firstResult = classifyDuplicate({ ...input, registry: firstOrder })
+    const secondResult = classifyDuplicate({ ...input, registry: secondOrder })
+    expect(firstResult).toEqual(secondResult)
+    expect(firstResult.diagnostic).toMatchObject({ code: 'identity-conflict', path: 'registry.identities.stateHistory', recordKeys: [{ source: 'catalog', key: 'a-missing' }] })
+  })
+
   it('does not impose the removed source/key reference rule', () => {
     const sourceWithOpaqueReferences = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one', 'catalog/missing'] }, { recordKey: second, publicId: 'puzzle-2', content }])
     const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: sourceWithOpaqueReferences })
