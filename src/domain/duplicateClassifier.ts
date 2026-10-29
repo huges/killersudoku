@@ -24,7 +24,6 @@ const sortRecords = (keys: RecordKey[]): RecordKey[] => keys.map(clone).sort((a,
 const stableValueText = (value: unknown): string => {
   try { return JSON.stringify(value) } catch { return String(value) }
 }
-const sortedIdentities = (registry: Registry): Registry['identities'] => [...registry.identities].sort((a, b) => compareText(stableValueText(a), stableValueText(b)))
 const sortedAssociations = (registry: Registry): Registry['associations'] => [...registry.associations].sort((a, b) => compareText(stableValueText(a), stableValueText(b)))
 const error = (observationRecordKey: RecordKey, code: string, path: string, message: string, recordKeys: RecordKey[] = []): DuplicateResult => ({ classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observationRecordKey), diagnostic: { code, path, recordKeys: sortRecords(recordKeys), message } })
 const validRecordKey = (value: unknown): value is RecordKey => typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 2 && typeof (value as RecordKey).source === 'string' && typeof (value as RecordKey).key === 'string' && recordPattern.test((value as RecordKey).source) && recordPattern.test((value as RecordKey).key)
@@ -41,7 +40,6 @@ const fingerprintKey = (fingerprint: FingerprintRef | unknown): string => {
 }
 const referencePattern = /^[A-Za-z0-9._/-]+$/
 const validReferences = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((reference) => typeof reference === 'string' && referencePattern.test(reference))
-const referenceFor = (key: RecordKey): string => `${key.source}/${key.key}`
 const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Object.keys(association).length === 7 && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -52,7 +50,7 @@ const firstDiagnostic = (diagnostics: DuplicateDiagnostic[]): DuplicateDiagnosti
 
 function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   if (registry === null || typeof registry !== 'object' || registry.schemaVersion !== '1' || registry.namespace !== 'killer-sudoku' || !Array.isArray(registry.identities) || !Array.isArray(registry.associations) || !Array.isArray(registry.reservedIds) || !Array.isArray(registry.reservedAliases)) return { code: 'invalid-input', path: 'registry', recordKeys: [], message: 'registry structure or namespace is invalid' }
-  const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const observations = new Map<string, string>(); const associationObservations = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationRecords = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationAliases = new Map<string, string>()
+  const ids = new Set<string>(); const aliases = new Map<string, string>(); const fingerprints = new Map<string, string>(); const records = new Map<string, string>(); const associationObservations = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationRecords = new Map<string, { publicId: string; recordKey: RecordKey }>(); const associationAliases = new Map<string, string>()
   const reservedIds = new Set<string>()
   const reservedIdValues = [...registry.reservedIds].sort(compareText)
   for (const value of reservedIdValues) {
@@ -99,11 +97,11 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
     if (previous) return { code: 'association-conflict', path: 'registry.associations.observationKey', recordKeys: [previous.recordKey, association.recordKey], message: 'observation has multiple registered associations' }
     associationsByObservation.set(association.observationKey, association)
   }
+  const observations = new Map<string, string>()
   for (const identity of [...registry.identities].sort((left, right) => compareText(String(left?.publicId), String(right?.publicId)))) {
     const identityRecordKey = identity && typeof identity === 'object' && identity.firstAssignment && typeof identity.firstAssignment === 'object' ? identity.firstAssignment.recordKey : undefined
     if (typeof identity?.publicId !== 'string' || !identity.firstAssignment || typeof identity.firstAssignment !== 'object' || typeof identity.firstAssignment.observationKey !== 'string' || typeof identity.currentStateObservation !== 'string' || !Array.isArray(identity.stateHistory) || identity.stateHistory.length === 0 || !['current', 'removed'].includes(identity.currentState as string) || identity.stateHistory.some((entry) => typeof entry !== 'object' || entry === null || typeof entry.observationKey !== 'string' || !['current', 'removed'].includes(entry.state as string))) return { code: 'invalid-input', path: 'registry.identities.stateHistory', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'identity state history is invalid' }
     const history = identity.stateHistory as readonly { observationKey: string; state: string }[]
-    const observations = new Map<string, string>()
     for (const entry of history) {
       const previous = observations.get(entry.observationKey)
       if (previous !== undefined) return { code: 'identity-conflict', path: 'registry.identities.stateHistory', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'identity observation is duplicated in state history' }
