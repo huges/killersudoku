@@ -148,6 +148,11 @@ describe('duplicate and historical association classification', () => {
     nullAssociation.associations = [null as never]
     expect(() => classifyDuplicate({ ...base, registry: nullAssociation })).not.toThrow()
     expect(classifyDuplicate({ ...base, registry: nullAssociation }).classification).toBe('errore bloccante')
+
+    const primitiveAssociation = structuredClone(registry())
+    primitiveAssociation.associations = ['malformed' as never]
+    expect(() => classifyDuplicate({ ...base, registry: primitiveAssociation })).not.toThrow()
+    expect(classifyDuplicate({ ...base, registry: primitiveAssociation }).classification).toBe('errore bloccante')
   })
 
   it('keeps the complete diagnostic stable across permutations of all registry collections', () => {
