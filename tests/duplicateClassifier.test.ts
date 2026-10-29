@@ -175,15 +175,15 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('makes association diagnostics invariant under permutation of distinct invalid associations', () => {
-    const unknownIdentity = { recordKey: { source: 'catalog', key: 'z-association' }, publicId: 'missing-id', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-z' }
-    const malformedShape = { recordKey: { source: 'catalog', key: 'a-association' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: ['bad alias!'], state: 'current' as const, observationKey: 'incoming-a' }
-    const firstOrder = registry([unknownIdentity, malformedShape])
-    const secondOrder = registry([malformedShape, unknownIdentity])
+    const nullAssociation = null as never
+    const primitiveAssociation = 'malformed' as never
+    const firstOrder = registry([nullAssociation, primitiveAssociation])
+    const secondOrder = registry([primitiveAssociation, nullAssociation])
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
     const firstResult = classifyDuplicate({ ...input, registry: firstOrder })
     const secondResult = classifyDuplicate({ ...input, registry: secondOrder })
     expect(firstResult).toEqual(secondResult)
-    expect(firstResult.diagnostic).toMatchObject({ code: 'invalid-input', path: 'registry.associations' })
+    expect(firstResult.diagnostic).toMatchObject({ code: 'invalid-input', path: 'registry.associations', recordKeys: [] })
   })
 
   it('does not impose the removed source/key reference rule', () => {

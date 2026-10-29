@@ -90,7 +90,7 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   for (const reservedAlias of reservedAliases) {
     if (aliases.has(reservedAlias)) return { code: 'alias-conflict', path: 'registry.reservedAliases', recordKeys: [], message: 'reserved alias is active' }
   }
-  for (const association of registry.associations) {
+  for (const association of sortedAssociations(registry)) {
     if (!validAssociationShape(association)) return { code: 'invalid-input', path: 'registry.associations', recordKeys: typeof association === 'object' && association !== null && validRecordKey((association as { recordKey?: unknown }).recordKey) ? [(association as { recordKey: RecordKey }).recordKey] : [], message: 'association structure is invalid' }
   }
   const associationsByObservation = new Map<string, Association>()
