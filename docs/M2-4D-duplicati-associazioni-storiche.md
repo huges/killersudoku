@@ -30,11 +30,11 @@ Ogni risultato positivo espone `algorithmVersion: "d4-v1"` e `observationRecordK
 
 ## Copertura verificata
 
-La matrice seguente distingue il requisito obbligatorio dalla regressione effettivamente presente in `tests/duplicateClassifier.test.ts`; l'esito indicato è quello verificato dal typecheck intermedio, mentre l'esecuzione Vitest resta al gate governato successivo.
+La matrice seguente distingue il requisito obbligatorio dalla regressione effettivamente presente in `tests/duplicateClassifier.test.ts`. Gli esiti riportano esclusivamente i controlli osservati in questa esecuzione; i gate completi governati di lint, suite con verifica catalogo, typecheck e build restano da rieseguire dopo la remediation.
 
 | Requisito 708/709 | Test effettivo | Esito osservato in questa fase |
 |---|---|---|
-| observationRecordKey obbligatoria/assente e distinta dal public ID | `rejects missing and malformed observationRecordKey independently from content validation` | Test scritto; typecheck passato; Vitest al gate |
+| observationRecordKey obbligatoria/assente e distinta dal public ID | `rejects missing and malformed observationRecordKey independently from content validation` | Test scritto; typecheck e focused Vitest passati |
 | observationRecordKey malformata | `rejects missing and malformed observationRecordKey independently from content validation` | Test scritto; typecheck passato; Vitest al gate |
 | PlayableContent osservato invalido | `rejects an invalid observed content with a valid observationRecordKey` | Test scritto; typecheck passato; Vitest al gate |
 | Fonte separata, contenuto storico mancante/invalido e riferimenti strutturalmente invalidi | `blocks missing, invalid...`, `rejects malformed source references...`, `blocks malformed source responses...` | Test scritto; typecheck passato; Vitest al gate |
@@ -53,4 +53,4 @@ La matrice seguente distingue il requisito obbligatorio dalla regressione effett
 | Ricorrenze storiche legittime, riserve coerenti e sequenza A-current/B-removed/A-current | `accepts legitimate alias and fingerprint recurrences...`, `accepts a registry with owner-consistent reservations...` | Test scritto; non eseguito in questa fase |
 | Immutabilità della fonte e dei dati serializzabili sottostanti nei successi incrementali | `classifies a first assignment registry...`, `accepts legitimate alias and fingerprint recurrences...` | Test scritto; non eseguito in questa fase |
 
-La matrice distingue test scritti da controlli eseguiti: il solo `npm run typecheck` verifica i tipi e non esegue le asserzioni Vitest. Questi test non autorizzano scritture: verificano che registro, fonte e input restino invariati. I gate successivi devono eseguire Vitest, lint e build; questa fase dichiara soltanto il controllo `npm run typecheck` riuscito e non anticipa tali esiti.
+La matrice distingue test scritti da controlli eseguiti in questa esecuzione. I test non autorizzano scritture: verificano che registro, fonte e input restino invariati. Il controllo finale deve rieseguire focused Vitest, lint, suite completa con `verify:catalog`, typecheck e build sul workspace risultante; gli esiti non vengono anticipati dalla documentazione.

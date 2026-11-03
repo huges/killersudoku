@@ -54,6 +54,17 @@ const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   const record = value as HistoricalRecord
   return validRecordKey(record.recordKey) && validId(record.publicId) && record.content !== undefined
 }
+const validStateHistory = (value: unknown): value is readonly { state: 'current' | 'removed'; observationKey: string }[] => {
+  if (!Array.isArray(value) || value.length === 0) return false
+  for (let index = 0; index < value.length; index += 1) {
+    if (!(index in value)) return false
+    const entry = value[index]
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry) || Object.keys(entry).length !== 2) return false
+    const state = entry as { state?: unknown; observationKey?: unknown }
+    if ((state.state !== 'current' && state.state !== 'removed') || typeof state.observationKey !== 'string') return false
+  }
+  return true
+}
 const firstDiagnostic = (diagnostics: DuplicateDiagnostic[]): DuplicateDiagnostic => [...diagnostics].sort((left, right) => compareText(JSON.stringify([left.code, left.path, left.recordKeys.map(recordText), left.message]), JSON.stringify([right.code, right.path, right.recordKeys.map(recordText), right.message])))[0]
 
 function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
@@ -108,8 +119,8 @@ function diagnosticForRegistry(registry: Registry): DuplicateDiagnostic | null {
   const observations = new Map<string, string>()
   for (const identity of [...registry.identities].sort((left, right) => compareText(String(left?.publicId), String(right?.publicId)))) {
     const identityRecordKey = identity && typeof identity === 'object' && identity.firstAssignment && typeof identity.firstAssignment === 'object' ? identity.firstAssignment.recordKey : undefined
-    if (typeof identity?.publicId !== 'string' || !identity.firstAssignment || typeof identity.firstAssignment !== 'object' || typeof identity.firstAssignment.observationKey !== 'string' || typeof identity.currentStateObservation !== 'string' || !Array.isArray(identity.stateHistory) || identity.stateHistory.length === 0 || !['current', 'removed'].includes(identity.currentState as string) || identity.stateHistory.some((entry) => typeof entry !== 'object' || entry === null || typeof entry.observationKey !== 'string' || !['current', 'removed'].includes(entry.state as string))) return { code: 'invalid-input', path: 'registry.identities.stateHistory', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'identity state history is invalid' }
-    const history = identity.stateHistory as readonly { observationKey: string; state: string }[]
+    if (typeof identity?.publicId !== 'string' || !identity.firstAssignment || typeof identity.firstAssignment !== 'object' || typeof identity.firstAssignment.observationKey !== 'string' || typeof identity.currentStateObservation !== 'string' || !validStateHistory(identity.stateHistory) || !['current', 'removed'].includes(identity.currentState as string)) return { code: 'invalid-input', path: 'registry.identities.stateHistory', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'identity state history is invalid' }
+    const history = identity.stateHistory
     for (const entry of history) {
       const previous = observations.get(entry.observationKey)
       if (previous !== undefined) return { code: 'identity-conflict', path: 'registry.identities.stateHistory', recordKeys: validRecordKey(identityRecordKey) ? [identityRecordKey] : [], message: 'identity observation is duplicated in state history' }

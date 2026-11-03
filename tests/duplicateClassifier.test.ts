@@ -223,6 +223,34 @@ describe('duplicate and historical association classification', () => {
     expect(classifyDuplicate({ ...input, registry: malformed }).diagnostic).toEqual(classifyDuplicate({ ...input, registry: permuted }).diagnostic)
   })
 
+  it('rejects sparse, null, undefined, and nested malformed stateHistory deterministically', () => {
+    const malformedHistories: Array<Registry['identities'][number]['stateHistory']> = []
+    const sparse = new Array<Registry['identities'][number]['stateHistory'][number]>(2)
+    sparse[1] = { state: 'current', observationKey: 'obs-1' }
+    malformedHistories.push(sparse)
+    malformedHistories.push([undefined as never])
+    malformedHistories.push([null as never])
+    malformedHistories.push([{ state: 'current', observationKey: { nested: true } } as never])
+    malformedHistories.push([{ state: 'current', observationKey: 'obs-1', extra: true } as never])
+
+    for (const stateHistory of malformedHistories) {
+      const malformed = registry()
+      malformed.identities[0].stateHistory = stateHistory
+      const before = structuredClone(malformed)
+      expect(() => classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: malformed, historicalContentSource: source([]) })).not.toThrow()
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: malformed, historicalContentSource: source([]) })
+      expect(result).toMatchObject({ classification: 'errore bloccante', algorithmVersion: 'd4-v1', observationRecordKey: observation, diagnostic: { code: 'invalid-input', path: 'registry.identities.stateHistory', recordKeys: [{ source: 'catalog', key: 'one' }] } })
+      expect(malformed).toEqual(before)
+    }
+
+    const first = registry()
+    first.identities[0].stateHistory = [{ state: 'current', observationKey: 'obs-1' }, { state: 'bad' as never, observationKey: 'obs-bad' } as never]
+    const second = registry()
+    second.identities[0].stateHistory = [...first.identities[0].stateHistory].reverse()
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
+    expect(classifyDuplicate({ ...input, registry: first }).diagnostic).toEqual(classifyDuplicate({ ...input, registry: second }).diagnostic)
+  })
+
   it('makes association diagnostics invariant under permutation of distinct invalid associations', () => {
     const nullAssociation = null as never
     const incompleteAssociation = { recordKey: { source: 'catalog', key: 'a-malformed' } } as never

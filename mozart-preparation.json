@@ -67,13 +67,7 @@
     "vite.config.ts",
     "vitest.config.ts"
   ],
-  "operations": {
-    "fixtures": {
-      "script": "catalog:generate-fixtures",
-      "args": ["$OUTPUT", "mozart-m2-4d", "1", "technical-v1"],
-      "outputs": ["$OUTPUT/inputs.json", "$OUTPUT/negative/derived-field.json", "$OUTPUT/negative/multiple-solutions.json", "$OUTPUT/negative/structurally-invalid.json", "$OUTPUT/negative/unsatisfiable.json"]
-    }
-  },
+  "operations": {},
   "identity_lock": null,
   "reference": null
 }
