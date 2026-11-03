@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { partialPuzzle } from '../src/domain/fixtures'
-import { extractPlayableContent, transformPlayableContent, type PlayableContent } from '../src/domain/identity'
+import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
+import { extractPlayableContent, fingerprintPlayableContent, transformPlayableContent, type PlayableContent } from '../src/domain/identity'
 import { classifyDuplicate, type HistoricalRecord } from '../src/domain/duplicateClassifier'
 import { assignIncremental, createEmptyRegistry, type AssignmentInput, type RecordKey, type Registry } from '../src/domain/registry'
 
@@ -15,10 +15,21 @@ function registry(extraAssociations: Registry['associations'] = []): Registry {
     { recordKey: second, publicId: 'puzzle-2', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'obs-2' },
     ...extraAssociations,
   ]
-  return { schemaVersion: '1', namespace: 'killer-sudoku', identities: [
+  const identities: Registry['identities'] = [
     { publicId: 'puzzle-1', firstAssignment: { recordKey: first, observationKey: 'obs-1' }, fingerprints: [], aliases: [], stateHistory: [{ state: 'current', observationKey: 'obs-1' }], currentState: 'current', currentStateObservation: 'obs-1' },
     { publicId: 'puzzle-2', firstAssignment: { recordKey: second, observationKey: 'obs-2' }, fingerprints: [], aliases: [], stateHistory: [{ state: 'current', observationKey: 'obs-2' }], currentState: 'current', currentStateObservation: 'obs-2' },
-  ], associations, reservedIds: [], reservedAliases: [] }
+  ]
+  for (const association of extraAssociations) {
+    const identity = association && typeof association === 'object' ? identities.find((candidate) => candidate.publicId === association.publicId) : undefined
+    if (identity && !identity.stateHistory.some((entry) => entry.observationKey === association.observationKey)) {
+      identity.stateHistory = [...identity.stateHistory, { state: association.state, observationKey: association.observationKey }]
+      if (association.state === 'current') {
+        identity.currentState = 'current'
+        identity.currentStateObservation = association.observationKey
+      }
+    }
+  }
+  return { schemaVersion: '1', namespace: 'killer-sudoku', identities, associations, reservedIds: [], reservedAliases: [] }
 }
 
 function serializableInput(input: { content: unknown; registry: unknown; observationRecordKey: unknown }): unknown {
@@ -37,7 +48,17 @@ describe('duplicate and historical association classification', () => {
     expect(result.observationRecordKey).toEqual(observation)
   })
   it('covers D4 and keeps multiple records of one identity', () => {
-    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformPlayableContent(content, 'rotate90'), registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-1', content }]) })
+    const sameIdentity = registry()
+    sameIdentity.identities = [sameIdentity.identities[0]]
+    sameIdentity.associations = [sameIdentity.associations[0]]
+    sameIdentity.identities[0].firstAssignment = { recordKey: first, observationKey: 'obs-1' }
+    sameIdentity.identities[0].stateHistory = [...sameIdentity.identities[0].stateHistory, { state: 'current', observationKey: 'obs-2' }]
+    sameIdentity.identities[0].currentStateObservation = 'obs-2'
+    sameIdentity.associations = [
+      sameIdentity.associations[0],
+      { recordKey: second, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'obs-2' },
+    ]
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformPlayableContent(content, 'rotate90'), registry: sameIdentity, historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-1', content }]) })
     expect(result).toMatchObject({ classification: 'duplicato', publicId: 'puzzle-1' })
     expect(result.matches).toHaveLength(2)
     expect(result.matches?.every((match) => match.transformations.length > 0)).toBe(true)
@@ -67,14 +88,14 @@ describe('duplicate and historical association classification', () => {
     const before = serializableInput(input)
     const result = classifyDuplicate(input)
     expect(result.diagnostic?.code).toBe('invalid-input')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
   })
   it('accepts structurally valid historical references without inventing source/key semantics', () => {
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/two'] }, { recordKey: second, publicId: 'puzzle-2', content, references: ['catalog/two'] }]) }
     const before = serializableInput(input)
     const result = classifyDuplicate(input)
     expect(result.classification).toBe('ambiguità')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
   })
   it('gives registered association precedence and reports a coherent explicit candidate', () => {
     const associations = [{ recordKey: observation, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'incoming-1' }]
@@ -108,11 +129,32 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('recognizes every D4 transformation while comparing complete content', () => {
+    // Matches express the transform from observed content back to historical content.
+    const inverseTransformation = {
+      identity: 'identity',
+      rotate90: 'rotate270',
+      rotate180: 'rotate180',
+      rotate270: 'rotate90',
+      reflectVertical: 'reflectVertical',
+      reflectHorizontal: 'reflectHorizontal',
+      reflectMainDiagonal: 'reflectMainDiagonal',
+      reflectAntiDiagonal: 'reflectAntiDiagonal',
+    } as const
+    const nonEquivalent = extractPlayableContent(solvedPuzzle)
+    const sameIdentity = registry()
+    sameIdentity.identities = [sameIdentity.identities[0]]
+    sameIdentity.associations = [sameIdentity.associations[0]]
+    sameIdentity.identities[0].stateHistory = [...sameIdentity.identities[0].stateHistory, { state: 'current', observationKey: 'obs-2' }]
+    sameIdentity.identities[0].currentStateObservation = 'obs-2'
+    sameIdentity.associations = [
+      sameIdentity.associations[0],
+      { recordKey: second, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current', observationKey: 'obs-2' },
+    ]
     for (const transformation of ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal'] as const) {
       const transformed = transformPlayableContent(content, transformation)
-      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformed, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }]) })
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content: transformed, registry: sameIdentity, historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content }, { recordKey: second, publicId: 'puzzle-1', content: nonEquivalent }]) })
       expect(result.classification).toBe('duplicato')
-      expect(result.matches?.[0].transformations).toContain(transformation)
+      expect(result.matches?.[0].transformations).toContain(inverseTransformation[transformation])
     }
   })
 
@@ -128,11 +170,16 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('rejects incomplete explicit selections and keeps successful inputs immutable', () => {
-    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source(records()), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
+    const historicalRecords = records()
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source(historicalRecords), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
     const before = serializableInput(input)
+    const historicalBefore = structuredClone(historicalRecords)
+    const selectionBefore = structuredClone({ requestedPublicId: input.requestedPublicId, candidateRecordKey: input.candidateRecordKey })
     const result = classifyDuplicate(input)
     expect(result.classification).toBe('associazione proposta verificata')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
+    expect(historicalRecords).toEqual(historicalBefore)
+    expect({ requestedPublicId: input.requestedPublicId, candidateRecordKey: input.candidateRecordKey }).toEqual(selectionBefore)
     expect(classifyDuplicate({ ...input, requestedPublicId: undefined }).diagnostic?.code).toBe('invalid-input')
   })
 
@@ -191,13 +238,16 @@ describe('duplicate and historical association classification', () => {
   it('makes state-history association diagnostics invariant under permutation of valid incoherent associations', () => {
     const missingA = { recordKey: { source: 'catalog', key: 'a-missing' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'missing-a' }
     const missingB = { recordKey: { source: 'catalog', key: 'b-missing' }, publicId: 'puzzle-1', observedPublicId: null, fingerprint: null, aliases: [], state: 'current' as const, observationKey: 'missing-b' }
-    const firstOrder = registry([missingB, missingA])
-    const secondOrder = registry([missingA, missingB])
+    // Do not let registry() repair the missing stateHistory entries for this negative test.
+    const firstOrder = registry()
+    firstOrder.associations.push(missingB, missingA)
+    const secondOrder = registry()
+    secondOrder.associations.push(missingA, missingB)
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, historicalContentSource: source([]) }
     const firstResult = classifyDuplicate({ ...input, registry: firstOrder })
     const secondResult = classifyDuplicate({ ...input, registry: secondOrder })
     expect(firstResult).toEqual(secondResult)
-    expect(firstResult.diagnostic).toMatchObject({ code: 'identity-conflict', path: 'registry.identities.stateHistory', recordKeys: [{ source: 'catalog', key: 'a-missing' }] })
+    expect(firstResult.diagnostic).toMatchObject({ code: 'identity-conflict', path: 'registry.associations', recordKeys: [{ source: 'catalog', key: 'a-missing' }] })
   })
 
   it('does not impose the removed source/key reference rule', () => {
@@ -208,11 +258,18 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('blocks non-equivalent explicit candidates and keeps failed inputs immutable', () => {
-    const nonEquivalent = { ...content, clues: content.clues.map((clue) => ({ ...clue, value: clue.value === 1 ? 2 : 1 })) }
-    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content: nonEquivalent }]), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
+    const single = registry()
+    single.identities = [single.identities[0]]
+    single.associations = [single.associations[0]]
+    const historicalRecords = [{ recordKey: first, publicId: 'puzzle-1', content: extractPlayableContent(solvedPuzzle) }]
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: single, historicalContentSource: source(historicalRecords), requestedPublicId: 'puzzle-1', candidateRecordKey: first }
     const before = serializableInput(input)
+    const historicalBefore = structuredClone(historicalRecords)
+    const selectionBefore = structuredClone({ requestedPublicId: input.requestedPublicId, candidateRecordKey: input.candidateRecordKey })
     expect(classifyDuplicate(input).diagnostic?.code).toBe('candidate-not-equivalent')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
+    expect(historicalRecords).toEqual(historicalBefore)
+    expect({ requestedPublicId: input.requestedPublicId, candidateRecordKey: input.candidateRecordKey }).toEqual(selectionBefore)
   })
 
   it('blocks malformed source responses without throwing', () => {
@@ -245,7 +302,7 @@ describe('duplicate and historical association classification', () => {
     expect(result.classification).toBe('errore bloccante')
     expect(result.diagnostic?.code).toBe('identity-conflict')
     expect(result.diagnostic?.path).toBe('registry.associations.recordKey')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
 
     const legitimate = registry([{ recordKey: first, publicId: 'puzzle-1', observedPublicId: 'puzzle-1', fingerprint: null, aliases: [], state: 'current', observationKey: 'incoming-1' }])
     expect(classifyDuplicate({ ...input, registry: legitimate }).diagnostic?.code).not.toBe('identity-conflict')
@@ -275,7 +332,7 @@ describe('duplicate and historical association classification', () => {
     const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: malformed, historicalContentSource: source([]) }
     const before = serializableInput(input)
     expect(classifyDuplicate(input).diagnostic?.code).toBe('identity-conflict')
-    expect(input).toEqual(before)
+    expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
     expect(classifyDuplicate({ ...input, content: { invalid: true } as never }).diagnostic?.code).toBe('invalid-input')
   })
 
@@ -338,8 +395,9 @@ describe('duplicate and historical association classification', () => {
   })
 
   it('accepts cumulative associations for one identity when the registry is built incrementally', () => {
-    const firstAssignment = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'one' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }], true)
-    const cumulative = assigned(firstAssignment, [{ recordKey: { source: 'integration', key: 'two' }, content, fingerprint: { contract: 'playable-content-v1', kind: 'current', value: `sha256-${'a'.repeat(64)}` }, aliases: ['shared-alias'], state: 'current' }])
+    const fingerprint = { contract: 'playable-content-v1' as const, kind: 'current' as const, value: fingerprintPlayableContent(content) }
+    const firstAssignment = assigned(createEmptyRegistry(), [{ recordKey: { source: 'integration', key: 'one' }, content, fingerprint, aliases: ['shared-alias'], state: 'current' }], true)
+    const cumulative = assigned(firstAssignment, [{ recordKey: { source: 'integration', key: 'two' }, content, fingerprint, aliases: ['shared-alias'], state: 'current' }])
     const historical = sourceFor(cumulative)
     expectSourceCoverage(cumulative, historical)
     const before = structuredClone(cumulative)

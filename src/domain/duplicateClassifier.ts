@@ -24,7 +24,15 @@ const sortRecords = (keys: RecordKey[]): RecordKey[] => keys.map(clone).sort((a,
 const stableValueText = (value: unknown): string => {
   try { return JSON.stringify(value) } catch { return String(value) }
 }
-const sortedAssociations = (registry: Registry): Registry['associations'] => [...registry.associations].sort((a, b) => compareText(stableValueText(a), stableValueText(b)))
+const sortedAssociations = (registry: Registry): Registry['associations'] => [...registry.associations].sort((a, b) => {
+  const aValidKey = typeof a === 'object' && a !== null && validRecordKey((a as { recordKey?: unknown }).recordKey)
+  const bValidKey = typeof b === 'object' && b !== null && validRecordKey((b as { recordKey?: unknown }).recordKey)
+  if (aValidKey !== bValidKey) return aValidKey ? -1 : 1
+  const aKey = aValidKey ? recordText((a as { recordKey: RecordKey }).recordKey) : ''
+  const bKey = bValidKey ? recordText((b as { recordKey: RecordKey }).recordKey) : ''
+  const byKey = compareText(aKey, bKey)
+  return byKey !== 0 ? byKey : compareText(stableValueText(a), stableValueText(b))
+})
 const error = (observationRecordKey: RecordKey, code: string, path: string, message: string, recordKeys: RecordKey[] = []): DuplicateResult => ({ classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observationRecordKey), diagnostic: { code, path, recordKeys: sortRecords(recordKeys), message } })
 const validRecordKey = (value: unknown): value is RecordKey => typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 2 && typeof (value as RecordKey).source === 'string' && typeof (value as RecordKey).key === 'string' && recordPattern.test((value as RecordKey).source) && recordPattern.test((value as RecordKey).key)
 const validId = (value: unknown): value is string => typeof value === 'string' && idPattern.test(value)
@@ -44,7 +52,7 @@ const validAssociationShape = (association: unknown): association is Association
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as HistoricalRecord
-  return validRecordKey(record.recordKey) && validId(record.publicId) && record.content !== undefined && (record.references === undefined || validReferences(record.references))
+  return validRecordKey(record.recordKey) && validId(record.publicId) && record.content !== undefined
 }
 const firstDiagnostic = (diagnostics: DuplicateDiagnostic[]): DuplicateDiagnostic => [...diagnostics].sort((left, right) => compareText(JSON.stringify([left.code, left.path, left.recordKeys.map(recordText), left.message]), JSON.stringify([right.code, right.path, right.recordKeys.map(recordText), right.message])))[0]
 
