@@ -4,8 +4,12 @@ import { type Association, type FingerprintRef, type RecordKey, type Registry } 
 export const DUPLICATE_CLASSIFICATION_ALGORITHM = 'd4-v1' as const
 export type DuplicateClassification = 'nuovo contenuto' | 'duplicato' | 'associazione proposta verificata' | 'associazione già registrata' | 'ambiguità' | 'errore bloccante'
 
+export type HistoricalReference = { reference: string; recordKey: RecordKey }
 export type HistoricalRecord = { recordKey: RecordKey; publicId: string; content: PlayableContent; references?: readonly string[] }
-export type HistoricalContentSource = { resolve: (recordKey: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous' }
+export type HistoricalContentSource = {
+  resolve: (recordKey: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous'
+  resolveReference?: (reference: string) => HistoricalReference | 'missing' | 'ambiguous'
+}
 export type DuplicateInput = { namespace: 'killer-sudoku'; observationRecordKey: RecordKey; content: PlayableContent; registry: Registry; historicalContentSource: HistoricalContentSource; requestedPublicId?: string; candidateRecordKey?: RecordKey }
 export type DuplicateDiagnostic = { code: string; path: string; recordKeys: RecordKey[]; message: string }
 export type DuplicateMatch = { recordKey: RecordKey; publicId: string; transformations: string[] }
@@ -48,6 +52,18 @@ const fingerprintKey = (fingerprint: FingerprintRef | unknown): string => {
 }
 const referencePattern = /^[A-Za-z0-9._/-]+$/
 const validReferences = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((reference) => typeof reference === 'string' && referencePattern.test(reference))
+const historicalReferenceDiagnostic = (record: HistoricalRecord, source: HistoricalContentSource, key: RecordKey): DuplicateDiagnostic | null => {
+  if (record.references === undefined) return null
+  if (typeof source.resolveReference !== 'function') return { code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [key], message: 'declared historical references require an authorized resolver' }
+  for (const reference of [...record.references].sort(compareText)) {
+    let resolved: HistoricalReference | 'missing' | 'ambiguous'
+    try { resolved = source.resolveReference(reference) } catch { resolved = 'ambiguous' }
+    if (resolved === 'missing') return { code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} does not exist` }
+    if (resolved === 'ambiguous') return { code: 'ambiguous-historical-reference', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} is ambiguous` }
+    if (!resolved || !validRecordKey(resolved.recordKey) || !sameRecord(resolved.recordKey, key)) return { code: 'identity-conflict', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} is incoherent with its record` }
+  }
+  return null
+}
 const validAssociationShape = (association: unknown): association is Association => typeof association === 'object' && association !== null && !Array.isArray(association) && Object.keys(association).length === 7 && Array.isArray((association as Association).aliases) && (association as Association).aliases.every(validAlias) && typeof (association as Association).observationKey === 'string' && ((association as Association).state === 'current' || (association as Association).state === 'removed')
 const validHistoricalRecord = (value: unknown): value is HistoricalRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -182,6 +198,10 @@ export function classifyDuplicate(input: DuplicateInput): DuplicateResult {
     if (resolved === 'ambiguous' || !resolved) return error(observation, resolved === 'ambiguous' ? 'ambiguous-historical-reference' : 'invalid-historical-content', 'historicalContentSource', 'historical record cannot be associated unambiguously', [key])
     if (!validHistoricalRecord(resolved) || !sameRecord(resolved.recordKey, key) || !validId(resolved.publicId)) return error(observation, 'invalid-historical-content', 'historicalContentSource', 'historical record structure is invalid', [key])
     if (resolved.references !== undefined && !validReferences(resolved.references)) return error(observation, 'invalid-input', 'historicalContentSource.references', 'historical references are malformed', [key])
+    if (resolved.references !== undefined) {
+      const referenceDiagnostic = historicalReferenceDiagnostic(resolved, input.historicalContentSource, key)
+      if (referenceDiagnostic) return { classification: 'errore bloccante', algorithmVersion: DUPLICATE_CLASSIFICATION_ALGORITHM, observationRecordKey: clone(observation), diagnostic: firstDiagnostic([referenceDiagnostic]) }
+    }
     if (!input.registry.identities.some((identity) => identity.publicId === resolved.publicId)) return error(observation, 'unknown-reference', 'historicalContentSource.publicId', 'historical record references an unknown public ID', [key])
     const owningIdentity = input.registry.identities.find((identity) => sameRecord(identity.firstAssignment.recordKey, key))
     const owningAssociation = input.registry.associations.find((association) => sameRecord(association.recordKey, key))

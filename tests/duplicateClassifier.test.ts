@@ -36,8 +36,14 @@ function serializableInput(input: { content: unknown; registry: unknown; observa
   return { content: structuredClone(input.content), registry: structuredClone(input.registry), observationRecordKey: structuredClone(input.observationRecordKey) }
 }
 
-function source(records: HistoricalRecord[]): { resolve: (key: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous' } {
-  return { resolve: (key) => records.find((record) => JSON.stringify(record.recordKey) === JSON.stringify(key)) ?? 'missing' }
+function source(records: HistoricalRecord[]): { resolve: (key: RecordKey) => HistoricalRecord | 'missing' | 'ambiguous'; resolveReference: (reference: string) => { reference: string; recordKey: RecordKey } | 'missing' | 'ambiguous' } {
+  return {
+    resolve: (key) => records.find((record) => JSON.stringify(record.recordKey) === JSON.stringify(key)) ?? 'missing',
+    resolveReference: (reference) => {
+      const owner = records.find((record) => record.references?.includes(reference))
+      return owner ? { reference, recordKey: owner.recordKey } : 'missing'
+    },
+  }
 }
 const records = (one: PlayableContent = content, two: PlayableContent = content): HistoricalRecord[] => [{ recordKey: first, publicId: 'puzzle-1', content: one, references: ['catalog/one'] }, { recordKey: second, publicId: 'puzzle-2', content: two, references: ['catalog/two'] }]
 
@@ -90,8 +96,8 @@ describe('duplicate and historical association classification', () => {
     expect(result.diagnostic?.code).toBe('invalid-input')
     expect({ content: input.content, registry: input.registry, observationRecordKey: input.observationRecordKey }).toEqual(before)
   })
-  it('accepts structurally valid historical references without inventing source/key semantics', () => {
-    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/two'] }, { recordKey: second, publicId: 'puzzle-2', content, references: ['catalog/two'] }]) }
+  it('accepts historical references that resolve coherently without adding source/key rules', () => {
+    const input = { namespace: 'killer-sudoku' as const, observationRecordKey: observation, content, registry: registry(), historicalContentSource: source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one'] }, { recordKey: second, publicId: 'puzzle-2', content, references: ['catalog/two'] }]) }
     const before = serializableInput(input)
     const result = classifyDuplicate(input)
     expect(result.classification).toBe('ambiguità')
@@ -278,11 +284,12 @@ describe('duplicate and historical association classification', () => {
     expect(firstResult.diagnostic).toMatchObject({ code: 'identity-conflict', path: 'registry.associations', recordKeys: [{ source: 'catalog', key: 'a-missing' }] })
   })
 
-  it('does not impose the removed source/key reference rule', () => {
-    const sourceWithOpaqueReferences = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one', 'catalog/missing'] }, { recordKey: second, publicId: 'puzzle-2', content }])
-    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: sourceWithOpaqueReferences })
-    expect(result.classification).toBe('ambiguità')
-    expect(result.diagnostic).toBeUndefined()
+  it('blocks an explicitly declared historical reference that cannot be resolved', () => {
+    const sourceWithUnknownReference = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one', 'catalog/missing'] }, { recordKey: second, publicId: 'puzzle-2', content }])
+    sourceWithUnknownReference.resolveReference = (reference) => reference === 'catalog/missing' ? 'missing' : { reference, recordKey: first }
+    const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: sourceWithUnknownReference })
+    expect(result.classification).toBe('errore bloccante')
+    expect(result.diagnostic).toMatchObject({ code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [first] })
   })
 
   it('blocks non-equivalent explicit candidates and keeps failed inputs immutable', () => {
