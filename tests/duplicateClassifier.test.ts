@@ -292,6 +292,17 @@ describe('duplicate and historical association classification', () => {
     expect(result.diagnostic).toMatchObject({ code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [first] })
   })
 
+  it('blocks resolver references that are mismatched or not strings', () => {
+    for (const resolvedReference of ['catalog/other', 42] as unknown[]) {
+      const sourceWithInvalidEcho = source([{ recordKey: first, publicId: 'puzzle-1', content, references: ['catalog/one'] }, { recordKey: second, publicId: 'puzzle-2', content }])
+      sourceWithInvalidEcho.resolveReference = () => ({ reference: resolvedReference, recordKey: first } as never)
+      const beforeResolver = sourceWithInvalidEcho.resolveReference
+      const result = classifyDuplicate({ namespace: 'killer-sudoku', observationRecordKey: observation, content, registry: registry(), historicalContentSource: sourceWithInvalidEcho })
+      expect(result).toMatchObject({ classification: 'errore bloccante', diagnostic: { code: 'identity-conflict', path: 'historicalContentSource.references', recordKeys: [first] } })
+      expect(sourceWithInvalidEcho.resolveReference).toBe(beforeResolver)
+    }
+  })
+
   it('blocks non-equivalent explicit candidates and keeps failed inputs immutable', () => {
     const single = registry()
     single.identities = [single.identities[0]]

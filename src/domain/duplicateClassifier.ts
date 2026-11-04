@@ -60,7 +60,8 @@ const historicalReferenceDiagnostic = (record: HistoricalRecord, source: Histori
     try { resolved = source.resolveReference(reference) } catch { resolved = 'ambiguous' }
     if (resolved === 'missing') return { code: 'unknown-reference', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} does not exist` }
     if (resolved === 'ambiguous') return { code: 'ambiguous-historical-reference', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} is ambiguous` }
-    if (!resolved || !validRecordKey(resolved.recordKey) || !sameRecord(resolved.recordKey, key)) return { code: 'identity-conflict', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} is incoherent with its record` }
+    if (!resolved || typeof resolved.reference !== 'string' || resolved.reference !== reference) return { code: 'identity-conflict', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} does not match the resolver response` }
+    if (!validRecordKey(resolved.recordKey) || !sameRecord(resolved.recordKey, key)) return { code: 'identity-conflict', path: 'historicalContentSource.references', recordKeys: [key], message: `historical reference ${reference} is incoherent with its record` }
   }
   return null
 }

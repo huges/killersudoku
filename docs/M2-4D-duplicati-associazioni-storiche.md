@@ -30,7 +30,7 @@ Ogni risultato positivo espone `algorithmVersion: "d4-v1"` e `observationRecordK
 
 ## Copertura verificata
 
-La matrice seguente distingue il requisito obbligatorio dalla regressione effettivamente presente in `tests/duplicateClassifier.test.ts`. Gli esiti riportano i controlli effettivamente osservati nel workspace corrente; i gate governati completi restano responsabilità della fase successiva.
+La matrice seguente distingue il requisito obbligatorio dalle regressioni effettivamente presenti in `tests/duplicateClassifier.test.ts`. Gli esiti riportano i controlli realmente osservati nel workspace corrente; i gate governati completi restano responsabilità della fase successiva. La regressione sui riferimenti verifica anche che `resolveReference` restituisca lo stesso riferimento richiesto e che il valore restituito sia una stringa; risposte discordanti o malformate producono errore bloccante.
 
 | Requisito 708/709 | Test effettivo | Esito osservato in questa fase |
 |---|---|---|
