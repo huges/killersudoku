@@ -7,10 +7,13 @@ import {
   lookupPublicId,
   lookupPublicQr,
   parsePublicQr,
+  readVerifiedDocument,
   serializePublicExport,
   toPublicExport,
 } from '../src/domain/publicBoundary'
 import { partialPuzzle } from '../src/domain/fixtures'
+import { newGame } from '../src/domain/game'
+import { serialize } from '../src/domain/serialization'
 
 const key = (source: string, value: string) => ({ source, key: value })
 const fingerprint = { contract: 'legacy-sha256' as const, kind: 'legacy' as const, value: `sha256-${'a'.repeat(64)}` }
@@ -58,6 +61,14 @@ describe('M2-4E public boundary', () => {
     expect(parsePublicQr(JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id }))).toEqual({ format: 'killer-sudoku-qr', version: 1, id })
     expect(lookupPublicQr(registry, source, JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id }))).toEqual(lookupPublicId(registry, source, id))
     expect(() => parsePublicQr(JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id, extra: true }))).toThrow('EXTRA_FIELD')
+    expect(() => parsePublicQr(JSON.stringify({ version: 1, id }))).toThrow('MISSING_FIELD')
+    expect(() => parsePublicQr(JSON.stringify({ format: 'killer-sudoku-qr', id }))).toThrow('MISSING_FIELD')
+    expect(() => parsePublicQr(JSON.stringify({ format: 'killer-sudoku-qr', version: 1 }))).toThrow('MISSING_FIELD')
+  })
+
+  it('dispatches a valid killer-sudoku-save containing both format markers', () => {
+    const document = { format: 'killer-sudoku-save' as const, schemaVersion: '1.0' as const, puzzle: partialPuzzle, game: newGame(partialPuzzle) }
+    expect(readVerifiedDocument(serialize(document))).toEqual(document)
   })
 
   it('writes a strict deterministic export without user or solution state', () => {
@@ -79,7 +90,8 @@ describe('M2-4E public boundary', () => {
   })
 
   it('resolves first assignment A in an A-current/B-removed/A-current history', () => {
-    const content = extractPlayableContent(partialPuzzle)
+    const contentA = extractPlayableContent(partialPuzzle)
+    const contentB = transformPlayableContent(contentA, 'rotate90')
     const first = assignIncremental(createEmptyRegistry(), [{ recordKey: key('feed', 'a'), fingerprint, aliases: [], state: 'current' }], { initialization: true })
     const second = assignIncremental(first.registry as Registry, [{ recordKey: key('feed', 'b'), fingerprint, aliases: [], state: 'removed' }], {})
     const third = assignIncremental(second.registry as Registry, [{ recordKey: key('feed', 'a'), fingerprint, aliases: [], state: 'current' }], {})
@@ -87,12 +99,12 @@ describe('M2-4E public boundary', () => {
     const registry = third.registry as Registry
     const source: HistoricalContentSource = {
       resolve: (recordKey) => recordKey.key === 'a'
-        ? { recordKey, publicId: registry.identities[0].publicId, content }
-        : { recordKey, publicId: registry.identities[0].publicId, content },
+        ? { recordKey, publicId: registry.identities[0].publicId, content: contentA }
+        : { recordKey, publicId: registry.identities[0].publicId, content: contentB },
     }
     const id = registry.identities[0].publicId
-    expect(lookupPublicId(registry, source, id).recordKey).toEqual(key('feed', 'a'))
-    expect(lookupPublicQr(registry, source, JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id })).recordKey).toEqual(key('feed', 'a'))
+    expect(lookupPublicId(registry, source, id).content).toEqual(contentA)
+    expect(lookupPublicQr(registry, source, JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id })).content).toEqual(contentA)
   })
 
   it('does not return a D4-transformed lookup payload', () => {

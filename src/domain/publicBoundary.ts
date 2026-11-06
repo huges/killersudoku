@@ -89,7 +89,11 @@ export function parsePublicQr(input: string): PublicQrPayload {
   if (typeof input !== 'string') fail('MALFORMED_QR', '$', 'QR payload must be UTF-8 JSON text')
   let value: unknown
   try { value = JSON.parse(input) } catch { fail('MALFORMED_QR', '$', 'QR payload is not valid JSON') }
-  if (!exactKeys(value, ['format', 'version', 'id'])) fail('EXTRA_FIELD', '$', 'QR payload must contain exactly format, version and id')
+  if (!isObject(value)) fail('MALFORMED_QR', '$', 'QR payload must be an object')
+  for (const field of ['format', 'version', 'id'] as const) {
+    if (!Object.prototype.hasOwnProperty.call(value, field)) fail('MISSING_FIELD', field, `QR payload is missing ${field}`)
+  }
+  if (!exactKeys(value, ['format', 'version', 'id'])) fail('EXTRA_FIELD', '$', 'QR payload contains unknown fields')
   if (value.format !== 'killer-sudoku-qr') fail('UNKNOWN_FORMAT', 'format', 'unsupported QR marker')
   if (value.version !== 1) fail('UNSUPPORTED_VERSION', 'version', 'unsupported QR version')
   if (!validId(value.id)) fail('INVALID_FIELD', 'id', 'QR public ID is invalid')
@@ -145,11 +149,11 @@ export function readVerifiedDocument(input: string): VerifiedDocument {
   if (!isObject(parsed)) fail('INVALID_FIELD', '$', 'document must be an object')
   const hasFormat = Object.prototype.hasOwnProperty.call(parsed, 'format')
   const hasSchemaVersion = Object.prototype.hasOwnProperty.call(parsed, 'schemaVersion')
-  if (hasFormat && hasSchemaVersion) fail('AMBIGUOUS_FORMAT', '$', 'document declares multiple format markers')
   if (hasFormat) {
     if (parsed.format === 'killer-sudoku-save') {
       try { return deserialize(input) } catch { fail('INVALID_CONTENT', '$', 'save document is invalid') }
     }
+    if (hasSchemaVersion) fail('AMBIGUOUS_FORMAT', '$', 'document declares incompatible format markers')
     if (parsed.format === 'killer-sudoku-export') return deserializePublicExport(input)
     fail('UNKNOWN_FORMAT', 'format', 'unsupported document marker')
   }
