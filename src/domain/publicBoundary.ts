@@ -1,5 +1,8 @@
 import { canonicalizePlayableContent, type PlayableContent } from './identity'
 import { type HistoricalContentSource, type HistoricalRecord } from './duplicateClassifier'
+import { deserialize } from './serialization'
+import { validatePuzzle } from './validation'
+import { type PuzzleDefinition, type SaveDocument } from './types'
 import { type Association, type FingerprintRef, type RecordKey, type Registry } from './registry'
 
 export type PublicDiagnosticCode =
@@ -119,10 +122,10 @@ function validateExport(value: unknown): asserts value is PublicExport {
 export function serializePublicExport(value: PublicExport): string {
   validateExport(value)
   return JSON.stringify({ format: 'killer-sudoku-export', version: 1, record: {
-    identity: { id: value.record.identity.id, ...(value.record.identity.aliases === undefined ? {} : { aliases: [...value.record.identity.aliases] }) },
+    identity: { id: value.record.identity.id, ...(value.record.identity.aliases === undefined || value.record.identity.aliases.length === 0 ? {} : { aliases: [...value.record.identity.aliases].sort() }) },
     recordKey: { source: value.record.recordKey.source, key: value.record.recordKey.key },
     ...(value.record.fingerprint === undefined ? {} : { fingerprint: clone(value.record.fingerprint) }),
-    content: clone(value.record.content),
+    content: JSON.parse(canonicalizePlayableContent(value.record.content)),
     ...(value.record.metadata === undefined ? {} : { metadata: { ...(value.record.metadata.difficulty === undefined ? {} : { difficulty: value.record.metadata.difficulty }) } }),
   } })
 }
@@ -132,6 +135,29 @@ export function deserializePublicExport(input: string): PublicExport {
   try { parsed = JSON.parse(input) } catch { fail('SERIALIZATION_FAILED', '$', 'export is not valid JSON') }
   validateExport(parsed)
   return clone(parsed)
+}
+
+export type VerifiedDocument = PuzzleDefinition | SaveDocument | PublicExport
+
+export function readVerifiedDocument(input: string): VerifiedDocument {
+  let parsed: unknown
+  try { parsed = JSON.parse(input) } catch { fail('SERIALIZATION_FAILED', '$', 'document is not valid JSON') }
+  if (!isObject(parsed)) fail('INVALID_FIELD', '$', 'document must be an object')
+  const hasFormat = Object.prototype.hasOwnProperty.call(parsed, 'format')
+  const hasSchemaVersion = Object.prototype.hasOwnProperty.call(parsed, 'schemaVersion')
+  if (hasFormat && hasSchemaVersion) fail('AMBIGUOUS_FORMAT', '$', 'document declares multiple format markers')
+  if (hasFormat) {
+    if (parsed.format === 'killer-sudoku-save') {
+      try { return deserialize(input) } catch { fail('INVALID_CONTENT', '$', 'save document is invalid') }
+    }
+    if (parsed.format === 'killer-sudoku-export') return deserializePublicExport(input)
+    fail('UNKNOWN_FORMAT', 'format', 'unsupported document marker')
+  }
+  if (hasSchemaVersion) {
+    try { validatePuzzle(parsed as unknown as PuzzleDefinition) } catch { fail('INVALID_CONTENT', '$', 'puzzle definition is invalid') }
+    return clone(parsed as unknown as PuzzleDefinition)
+  }
+  fail('UNKNOWN_FORMAT', '$', 'document format cannot be determined')
 }
 
 export function toPublicExport(result: PublicLookupResult, metadata?: PublicExport['record']['metadata']): PublicExport {

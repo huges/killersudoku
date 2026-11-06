@@ -33,7 +33,7 @@ Lo stato `removed` non cancella il contenuto: se la prima associazione è `remov
 
 L’export è costruito con allowlist positiva e non riusa implicitamente `killer-sudoku-save`. Contiene marker/versione e una proiezione esplicita di identità (`id`, alias consentiti), `RecordKey`, `FingerprintRef` opzionale, `PlayableContent` (`size`, `clues`, `cages`) e soltanto i metadati pubblici dichiarati (`difficulty`). Non propaga `IdentityHistory` completa: `firstAssignment`, associazioni, observation key e stati `removed` restano interni. Soluzione, note, cronologia, statistiche, sessione, progressi, stato utente, dati runtime e campi non allowlisted sono esclusi.
 
-`serializePublicExport` costruisce un nuovo oggetto e serializza deterministically; `deserializePublicExport` accetta soltanto marker/versione supportati, valida il contenuto e rifiuta campi extra.
+`serializePublicExport` costruisce un nuovo oggetto, canonicalizza il contenuto giocabile tramite `canonicalizePlayableContent` (senza trasformazioni D4) e ordina gli alias; `deserializePublicExport` accetta soltanto marker/versione supportati, valida il contenuto e rifiuta campi extra. Il dispatcher `readVerifiedDocument` distingue strictamente `PuzzleDefinition`, `killer-sudoku-save` ed export pubblico, riusando `validatePuzzle` e `deserialize`; marker o combinazioni non riconosciuti producono diagnostiche stabili.
 
 ## Salvataggio e test
 

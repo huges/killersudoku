@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractPlayableContent, transformPlayableContent } from '../src/domain/identity'
+import { arePlayableContentsD4Equivalent, extractPlayableContent, transformPlayableContent, type D4Transformation } from '../src/domain/identity'
 import { type HistoricalContentSource } from '../src/domain/duplicateClassifier'
 import { assignIncremental, createEmptyRegistry, type Registry } from '../src/domain/registry'
 import {
@@ -35,10 +35,12 @@ function registryFor(state: 'current' | 'removed' = 'current'): { registry: Regi
 describe('M2-4E public boundary', () => {
   it('resolves the first observation and preserves original content when current state is removed', () => {
     const { registry, source, content } = registryFor('removed')
-    const result = lookupPublicId(registry, source, registry.identities[0].publicId)
+    const id = registry.identities[0].publicId
+    const result = lookupPublicId(registry, source, id)
     expect(result.content).toEqual(content)
     expect(result.recordKey).toEqual(key('feed', 'a'))
     expect(result.state).toBe('removed')
+    expect(lookupPublicQr(registry, source, JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id }))).toEqual(result)
   })
 
   it('uses observationKey rather than array order and rejects inconsistent references', () => {
@@ -62,12 +64,17 @@ describe('M2-4E public boundary', () => {
     const { registry, source } = registryFor()
     const exported = toPublicExport(lookupPublicId(registry, source, registry.identities[0].publicId))
     const first = serializePublicExport(exported)
+    const reordered = { ...exported, record: { ...exported.record, identity: { ...exported.record.identity, aliases: [...(exported.record.identity.aliases ?? [])].reverse() }, content: { ...exported.record.content, clues: [...exported.record.content.clues].reverse(), cages: [...exported.record.content.cages].reverse().map((cage) => ({ ...cage, cells: [...cage.cells].reverse() })) } } }
     expect(first).toBe(serializePublicExport(exported))
+    expect(first).toBe(serializePublicExport(reordered))
     expect(first).toContain('killer-sudoku-export')
     expect(first).not.toContain('solution')
     expect(first).not.toContain('session')
     expect(first).not.toContain('history')
-    expect(deserializePublicExport(first)).toEqual(exported)
+    const roundTripped = deserializePublicExport(first)
+    expect(serializePublicExport(roundTripped)).toBe(first)
+    expect(roundTripped.record.identity.id).toBe(exported.record.identity.id)
+    expect(roundTripped.record.content).toEqual(JSON.parse(first).record.content)
     expect(() => deserializePublicExport(JSON.stringify({ ...exported, extra: true }))).toThrow('EXTRA_FIELD')
   })
 
@@ -93,5 +100,36 @@ describe('M2-4E public boundary', () => {
     const transformed = transformPlayableContent(content, 'rotate90')
     const result = lookupPublicId(registry, source, registry.identities[0].publicId)
     expect(result.content).not.toEqual(transformed)
+  })
+
+  it('verifies all eight D4 transformations without changing returned content', () => {
+    const { registry, source, content } = registryFor()
+    const transformations: D4Transformation[] = ['identity', 'rotate90', 'rotate180', 'rotate270', 'reflectVertical', 'reflectHorizontal', 'reflectMainDiagonal', 'reflectAntiDiagonal']
+    for (const transformation of transformations) {
+      expect(arePlayableContentsD4Equivalent(transformPlayableContent(content, transformation), content)).toBe(true)
+    }
+    expect(lookupPublicId(registry, source, registry.identities[0].publicId).content).toEqual(content)
+  })
+
+  it('resolves removed first assignments through QR and preserves opaque fingerprints, including absence', () => {
+    const removed = registryFor('removed')
+    const id = removed.registry.identities[0].publicId
+    const qr = JSON.stringify({ format: 'killer-sudoku-qr', version: 1, id })
+    expect(lookupPublicQr(removed.registry, removed.source, qr).fingerprint).toEqual(fingerprint)
+    const withoutFingerprint = {
+      ...removed.registry,
+      associations: removed.registry.associations.map((association) => ({ ...association, fingerprint: null })),
+    }
+    expect(lookupPublicQr(withoutFingerprint, removed.source, qr).fingerprint).toBeUndefined()
+  })
+
+  it('rejects missing, incoherent, duplicate, divergent and ambiguous historical references without fallback', () => {
+    const { registry, source } = registryFor()
+    const id = registry.identities[0].publicId
+    expect(() => lookupPublicId({ ...registry, identities: [{ ...registry.identities[0], firstAssignment: { ...registry.identities[0].firstAssignment, observationKey: '' } }] }, source, id)).toThrow('INCONSISTENT_REFERENCE')
+    expect(() => lookupPublicId({ ...registry, associations: [...registry.associations, { ...registry.associations[0] }] }, source, id)).toThrow('AMBIGUOUS_PUBLIC_REFERENCE')
+    expect(() => lookupPublicId({ ...registry, associations: [{ ...registry.associations[0], publicId: 'other-id' }] }, source, id)).toThrow('INCONSISTENT_REFERENCE')
+    expect(() => lookupPublicId(registry, { resolve: () => 'missing' }, id)).toThrow('INCONSISTENT_REFERENCE')
+    expect(() => lookupPublicId(registry, { resolve: () => 'ambiguous' }, id)).toThrow('INCONSISTENT_REFERENCE')
   })
 })
