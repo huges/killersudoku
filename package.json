@@ -15,6 +15,7 @@
     "catalog:generate-fixtures": "node --import tsx scripts/generate-catalog-fixtures.ts",
     "catalog:update-reference": "node --import tsx scripts/update-catalog-reference.ts",
     "catalog:register-identities": "node --import tsx scripts/register-catalog-identities.ts",
+    "migration": "node --import tsx scripts/migration-command.ts",
     "build": "npm run verify:catalog && npm run typecheck && vite build --config vite.config.ts"
   },
   "dependencies": {
