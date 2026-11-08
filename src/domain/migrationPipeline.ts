@@ -6,6 +6,8 @@ import { assignIncremental, type AssignmentInput, type Registry, type RecordKey 
 import { type PuzzleDefinition } from './types'
 import { validatePuzzle } from './validation'
 import { solve } from './solver'
+import { readVerifiedDocument, type PublicExport } from './publicBoundary'
+import { SCHEMA_VERSION, type Difficulty, type SaveDocument } from './types'
 
 export const MIGRATION_NAMESPACE = 'killer-sudoku' as const
 export const MIGRATION_ALGORITHM = 'd4-v1' as const
@@ -41,11 +43,41 @@ const keyText = (key: RecordKey): string => JSON.stringify([key.source, key.key]
 const diagnostic = (code: string, path: string, message: string, recordKey?: RecordKey): MigrationDiagnostic => ({ code, path, ...(recordKey ? { recordKey: clone(recordKey) } : {}), message })
 const stableJson = (value: unknown): string => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort(compare).map((key) => [key, item[key]])) : item)
 
+function puzzleFromPublicExport(document: PublicExport): LegacyRecord {
+  const content = document.record.content
+  const difficulty = document.record.metadata?.difficulty ?? 'easy'
+  return {
+    recordKey: clone(document.record.recordKey),
+    publicId: document.record.identity.id,
+    aliases: [...(document.record.identity.aliases ?? [])],
+    legacyFingerprint: document.record.fingerprint?.kind === 'legacy' ? document.record.fingerprint.value : null,
+    versions: { export: '1' },
+    references: [],
+    puzzle: {
+      schemaVersion: SCHEMA_VERSION, puzzleId: document.record.identity.id, difficulty, size: 9,
+      givens: Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, col) => content.clues.find((clue) => clue.row === row && clue.col === col)?.value ?? null)),
+      cages: content.cages.map((cage, index) => ({ id: `migration-cage-${index}`, cells: clone(cage.cells), sum: cage.sum })),
+    },
+  }
+}
+
 export function parseMigrationInput(value: unknown): LegacyRecord[] {
   const list = Array.isArray(value) ? value : [value]
   if (list.length === 0) throw new Error('input|records|empty input')
-  const ordered = list.map((item, index) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`input|records[${index}]|record must be an object`)
+  const ordered = list.map((original, index) => {
+    if (!original || typeof original !== 'object' || Array.isArray(original)) throw new Error(`input|records[${index}]|record must be an object`)
+    let item = original
+    const originalRecord = original as Record<string, unknown>
+    if (originalRecord.format === 'killer-sudoku-export') {
+      try { item = puzzleFromPublicExport(readVerifiedDocument(JSON.stringify(original)) as PublicExport) }
+      catch (error) { throw new Error(`input|records[${index}]|documented export is invalid: ${error instanceof Error ? error.message : String(error)}`) }
+    } else if (originalRecord.format === 'killer-sudoku-save' || Object.hasOwn(originalRecord, 'schemaVersion')) {
+      // Save and PuzzleDefinition readers are supported, but neither format carries a RecordKey.
+      // Do not invent one from puzzleId: migration identity requires an independently sourced key.
+      try { readVerifiedDocument(JSON.stringify(original)) }
+      catch (error) { throw new Error(`input|records[${index}]|documented document is invalid: ${error instanceof Error ? error.message : String(error)}`) }
+      throw new Error(`input|records[${index}].recordKey|documented save/puzzle format has no RecordKey`)
+    }
     const raw = item as Record<string, unknown>
     if (Object.keys(raw).some((key) => !['recordKey', 'puzzle', 'publicId', 'aliases', 'legacyFingerprint', 'versions', 'references'].includes(key))) throw new Error(`input|records[${index}]|unknown field`)
     const key = raw.recordKey

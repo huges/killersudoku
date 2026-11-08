@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
-import { execute, publishMultiFile, writeExclusive } from '../scripts/migration-command'
+import { execute, publishMultiFile, readJson, writeExclusive } from '../scripts/migration-command'
 import { parseMigrationInput, runMigration, stableMigrationJson, type LegacyRecord } from '../src/domain/migrationPipeline'
 import { extractPlayableContent } from '../src/domain/identity'
 import { classifyDuplicate, type HistoricalRecord } from '../src/domain/duplicateClassifier'
 import { deserializePublicExport, serializePublicExport, type PublicExport } from '../src/domain/publicBoundary'
 import { assignIncremental, createEmptyRegistry, type Registry } from '../src/domain/registry'
+import { newGame } from '../src/domain/game'
 
 const record = (key: string, overrides: Partial<LegacyRecord> = {}): LegacyRecord => ({
   recordKey: { source: 'legacy', key },
@@ -188,14 +189,75 @@ describe('M2-4F migration pipeline', () => {
     expect(result.records[0].duplicate?.matches?.[0].publicId).toBe(registry.identities[0].publicId)
   })
 
-  it('rejects unsupported source shapes instead of treating M2-1, identity-lock, or exports as legacy records', () => {
+  it('reads the documented public export while keeping M2-1 and identity-lock distinct source roles', () => {
     const technicalSample = JSON.parse(readFileSync(resolve(process.cwd(), 'catalog/fixtures/inputs.json'), 'utf8')) as unknown
     const identityLock = JSON.parse(readFileSync(resolve(process.cwd(), 'catalog/identity-lock.json'), 'utf8')) as unknown
-    const documentedExport = { format: 'killer-sudoku-export', version: 1, record: { identity: { id: 'puzzle-000001', aliases: [] }, recordKey: { source: 'legacy', key: 'x' }, content: { size: 9, clues: [], cages: [] } } }
+    const exportContent = extractPlayableContent(partialPuzzle)
+    const documentedExport: PublicExport = {
+      format: 'killer-sudoku-export', version: 1,
+      record: {
+        identity: { id: 'puzzle-000001', aliases: ['legacy-a', 'legacy-b'] },
+        recordKey: { source: 'legacy', key: 'export-record' },
+        fingerprint: { contract: 'legacy-sha256', kind: 'legacy', value: `sha256-${'a'.repeat(64)}` },
+        content: exportContent,
+      },
+    }
     expect(() => parseMigrationInput(technicalSample)).toThrow()
     expect(() => parseMigrationInput(identityLock)).toThrow()
-    expect(() => parseMigrationInput(documentedExport)).toThrow()
+    const imported = parseMigrationInput(documentedExport)
+    expect(imported).toHaveLength(1)
+    expect(imported[0]).toMatchObject({
+      recordKey: documentedExport.record.recordKey, publicId: 'puzzle-000001',
+      aliases: ['legacy-a', 'legacy-b'], legacyFingerprint: documentedExport.record.fingerprint?.value ?? null,
+      versions: { export: '1' },
+    })
+    expect(extractPlayableContent(imported[0].puzzle)).toEqual(exportContent)
+
+    // The M2-4E save and PuzzleDefinition readers validate these documented
+    // forms, but neither embeds a RecordKey. Migration must not invent one.
+    const saveDocument = { format: 'killer-sudoku-save', schemaVersion: '1.0', puzzle: partialPuzzle, game: newGame(partialPuzzle) }
+    expect(() => parseMigrationInput(saveDocument)).toThrow('documented save/puzzle format has no RecordKey')
+    expect(() => parseMigrationInput(partialPuzzle)).toThrow('documented save/puzzle format has no RecordKey')
     expect(() => parseMigrationInput({ ...record('opaque'), legacyFingerprint: 'not-a-digest-or-current-fingerprint' })).not.toThrow()
+  })
+
+  it('rejects an input path replaced between lstat and descriptor open', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-open-race-'))
+    const path = join(root, 'input.json')
+    const replacement = join(root, 'replacement.json')
+    try {
+      writeFileSync(path, JSON.stringify([record('original')]))
+      writeFileSync(replacement, JSON.stringify([record('replacement')]))
+      expect(() => readJson(path, {
+        beforeOpen: () => {
+          renameSync(path, join(root, 'original.json'))
+          renameSync(replacement, path)
+        },
+      })).toThrow('identity changed between validation and open')
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('accepts a documented export from a file through the migration command without altering public identity', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-cli-export-'))
+    try {
+      const content = extractPlayableContent(partialPuzzle)
+      const exported: PublicExport = {
+        format: 'killer-sudoku-export', version: 1,
+        record: {
+          identity: { id: 'puzzle-000042', aliases: ['old-name'] },
+          recordKey: { source: 'legacy', key: 'cli-export' },
+          fingerprint: { contract: 'legacy-sha256', kind: 'legacy', value: `sha256-${'b'.repeat(64)}` },
+          content,
+        },
+      }
+      writeFileSync(join(root, 'input.json'), JSON.stringify(exported))
+      const output = JSON.parse(execute(['migrate', '--input', 'input.json', '--output', 'candidate.json'], root))
+      expect(output.records[0]).toMatchObject({
+        recordKey: exported.record.recordKey, publicId: 'puzzle-000042', aliases: ['old-name'],
+        legacyFingerprint: exported.record.fingerprint?.value, content, outcome: 'candidate',
+      })
+      expect(readFileSync(join(root, 'candidate.json'), 'utf8')).toContain('puzzle-000042')
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   it('blocks absent migration prerequisites and rejects unverified historical content', () => {

@@ -1,5 +1,5 @@
-import { existsSync, lstatSync, statSync, readFileSync, writeFileSync, mkdtempSync, rmSync, linkSync, unlinkSync, openSync, closeSync, fstatSync, fsyncSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { constants, existsSync, lstatSync, statSync, readFileSync, writeFileSync, mkdtempSync, rmSync, linkSync, unlinkSync, openSync, closeSync, fstatSync, fsyncSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseMigrationInput, runMigration, stableMigrationJson, generateIdentityCandidate, type CandidateRecord, type MigrationCommand, type LegacyRecord } from '../src/domain/migrationPipeline'
 import type { HistoricalContentSource, HistoricalRecord } from '../src/domain/duplicateClassifier'
@@ -10,7 +10,21 @@ const usage = 'migration|arguments|usage: <command> --input FILE [--history FILE
 const rawPath = (value: string): void => {
   if (!value || value.includes('\0') || value.includes('\\') || isAbsolute(value) || /^[A-Za-z]:/.test(value) || value.split('/').some((part) => part === '' || part === '.' || part === '..')) throw new Error('filesystem|path|unauthorized raw path')
 }
-const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'))
+export type ReadHooks = { beforeOpen?: (path: string) => void }
+export function readJson(path: string, hooks: ReadHooks = {}): unknown {
+  const checked = lstatSync(path)
+  if (checked.isSymbolicLink() || !checked.isFile()) throw new Error('filesystem|input|source is not a regular non-symlink file')
+  hooks.beforeOpen?.(path)
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    const opened = fstatSync(descriptor)
+    if (!opened.isFile() || opened.dev !== checked.dev || opened.ino !== checked.ino) throw new Error('filesystem|input|source identity changed between validation and open')
+    const text = readFileSync(descriptor, 'utf8')
+    const afterRead = fstatSync(descriptor)
+    if (afterRead.dev !== opened.dev || afterRead.ino !== opened.ino || afterRead.size !== opened.size) throw new Error('filesystem|input|source changed while being read')
+    return JSON.parse(text)
+  } finally { closeSync(descriptor) }
+}
 const keyText = (key: RecordKey): string => JSON.stringify([key.source, key.key])
 function sourceFrom(value: unknown): HistoricalContentSource {
   if (!Array.isArray(value)) throw new Error('history|records|historical source must be an array')
@@ -50,6 +64,7 @@ function confined(root: string, path: string): string {
 }
 export type PublicationHooks = {
   afterStagingCreated?: (parent: string) => void
+  beforePublish?: (parent: string) => void
   write?: (descriptor: number, text: string) => void
   publish?: (temporary: string, destination: string) => void
 }
@@ -58,10 +73,23 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
   const parent = dirname(path)
   const before = lstatSync(parent)
   if (!before.isDirectory() || before.isSymbolicLink()) throw new Error('filesystem|parent|authorized parent is not a real directory')
-  const staging = mkdtempSync(resolve(parent, '.mozart-migration-'))
-  const temporary = resolve(staging, 'output.json')
+  // Keep the authorized directory object open for the whole transaction. The
+  // final hard link is addressed through this descriptor, not a re-resolved path.
+  const parentDescriptor = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+  const anchoredParent = fstatSync(parentDescriptor)
+  if (!anchoredParent.isDirectory() || anchoredParent.dev !== before.dev || anchoredParent.ino !== before.ino) {
+    closeSync(parentDescriptor)
+    throw new Error('filesystem|parent|parent identity changed while opening publication directory')
+  }
+  // Linux exposes an opened directory through procfs. Use that stable handle for
+  // staging and final publication; fail closed on platforms without descriptor paths.
+  const anchoredPath = `/proc/self/fd/${parentDescriptor}`
+  const staging = mkdtempSync(join(anchoredPath, '.mozart-migration-'))
+  const temporary = join(staging, 'output.json')
+  const destination = join(anchoredPath, basename(path))
   try {
     hooks.afterStagingCreated?.(parent)
+    hooks.beforePublish?.(parent)
     const descriptor = openSync(temporary, 'wx')
     try {
       const opened = fstatSync(descriptor)
@@ -74,10 +102,13 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
     const after = lstatSync(parent)
     if (!after.isDirectory() || after.isSymbolicLink() || before.dev !== after.dev || before.ino !== after.ino) throw new Error('filesystem|parent|parent directory changed during publication')
     // A hard link publishes the fully flushed same-filesystem inode atomically and fails if the destination exists.
-    if (hooks.publish) hooks.publish(temporary, path)
-    else linkSync(temporary, path)
+    if (hooks.publish) hooks.publish(temporary, destination)
+    else linkSync(temporary, destination)
     unlinkSync(temporary)
-  } finally { rmSync(staging, { recursive: true, force: true }) }
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+    closeSync(parentDescriptor)
+  }
 }
 
 /**
