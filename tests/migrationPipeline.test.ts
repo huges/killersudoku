@@ -205,7 +205,7 @@ describe('M2-4F migration pipeline', () => {
     }
     const technical = loadSample(process.cwd())
     expect(technical.puzzles).toEqual(technicalSample)
-    expect(verifySample(process.cwd())).toContain('\"puzzles\"')
+    expect(verifySample(process.cwd())).toContain('"puzzles"')
     expect(() => parseMigrationInput(technicalSample)).toThrow('recordKey')
     // The M2-1 sample and legacy identity-lock remain distinct from complete historical records.
     expect(() => parseMigrationInput(identityLock)).toThrow()
