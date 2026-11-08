@@ -1,7 +1,7 @@
-import { constants, existsSync, lstatSync, statSync, readFileSync, writeFileSync, mkdtempSync, rmSync, linkSync, unlinkSync, openSync, closeSync, fstatSync, fsyncSync } from 'node:fs'
+import { constants, lstatSync, readFileSync, writeFileSync, mkdtempSync, rmSync, linkSync, unlinkSync, openSync, closeSync, fstatSync, fsyncSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseMigrationInput, runMigration, stableMigrationJson, generateIdentityCandidate, type CandidateRecord, type MigrationCommand, type LegacyRecord } from '../src/domain/migrationPipeline'
+import { parseMigrationInput, runMigration, stableMigrationJson, generateIdentityCandidate, type MigrationCommand, type LegacyRecord } from '../src/domain/migrationPipeline'
 import type { HistoricalContentSource, HistoricalRecord } from '../src/domain/duplicateClassifier'
 import type { Registry, RecordKey } from '../src/domain/registry'
 
@@ -11,19 +11,107 @@ const rawPath = (value: string): void => {
   if (!value || value.includes('\0') || value.includes('\\') || isAbsolute(value) || /^[A-Za-z]:/.test(value) || value.split('/').some((part) => part === '' || part === '.' || part === '..')) throw new Error('filesystem|path|unauthorized raw path')
 }
 export type ReadHooks = { beforeOpen?: (path: string) => void }
-export function readJson(path: string, hooks: ReadHooks = {}): unknown {
-  const checked = lstatSync(path)
-  if (checked.isSymbolicLink() || !checked.isFile()) throw new Error('filesystem|input|source is not a regular non-symlink file')
-  hooks.beforeOpen?.(path)
-  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+type OpenedJson = { value: unknown; dev: number; ino: number }
+const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY
+const noFollowDirectoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW
+const descriptorPath = (descriptor: number, child = ''): string => `/proc/self/fd/${descriptor}${child ? `/${child}` : ''}`
+function duplicateDirectoryDescriptor(descriptor: number): number {
+  // The procfs fd entry is itself a symlink: O_NOFOLLOW on that bare path
+  // causes ENOTDIR. Follow only this trusted descriptor handle, then verify its
+  // identity; child opens still use O_NOFOLLOW on the actual final component.
+  const duplicate = openSync(descriptorPath(descriptor), constants.O_RDONLY | constants.O_DIRECTORY)
+  const originalMetadata = fstatSync(descriptor)
+  const duplicateMetadata = fstatSync(duplicate)
+  if (!duplicateMetadata.isDirectory() || duplicateMetadata.dev !== originalMetadata.dev || duplicateMetadata.ino !== originalMetadata.ino) {
+    closeSync(duplicate)
+    throw new Error('filesystem|path|directory descriptor identity changed')
+  }
+  return duplicate
+}
+
+// Walk from the filesystem root using retained directory descriptors. Each
+// component is opened relative to the preceding descriptor, so replacing an
+// ancestor pathname cannot redirect subsequent opens. Fail closed without procfs.
+function openAnchoredDirectory(absolutePath: string): number {
+  if (!isAbsolute(absolutePath)) throw new Error('filesystem|path|directory path must be absolute')
+  const components = absolutePath.split(sep).filter(Boolean)
+  let descriptor = openSync(sep, directoryFlags)
   try {
-    const opened = fstatSync(descriptor)
-    if (!opened.isFile() || opened.dev !== checked.dev || opened.ino !== checked.ino) throw new Error('filesystem|input|source identity changed between validation and open')
-    const text = readFileSync(descriptor, 'utf8')
-    const afterRead = fstatSync(descriptor)
-    if (afterRead.dev !== opened.dev || afterRead.ino !== opened.ino || afterRead.size !== opened.size) throw new Error('filesystem|input|source changed while being read')
-    return JSON.parse(text)
-  } finally { closeSync(descriptor) }
+    for (const component of components) {
+      const componentPath = descriptorPath(descriptor, component)
+      const componentMetadata = lstatSync(componentPath)
+      if (componentMetadata.isSymbolicLink()) throw new Error('filesystem|path|symlink component')
+      const next = openSync(componentPath, noFollowDirectoryFlags)
+      const metadata = fstatSync(next)
+      if (!metadata.isDirectory()) { closeSync(next); throw new Error('filesystem|path|component is not a directory') }
+      closeSync(descriptor)
+      descriptor = next
+    }
+    return descriptor
+  } catch (error) { closeSync(descriptor); throw error }
+}
+
+type OpenedFile = { descriptor: number; parent: number; leaf: string; metadata: ReturnType<typeof fstatSync> }
+function openFileFromParent(parent: number, leaf: string, path: string, hooks: ReadHooks = {}): OpenedFile {
+  // The caller already holds this directory open from a descriptor-relative walk.
+  // Do not reopen /proc/self/fd/N with O_NOFOLLOW: procfs exposes that handle as
+  // a symlink, and the flag would reject the descriptor path rather than a file.
+  const checked = lstatSync(descriptorPath(parent, leaf))
+  if (!checked.isFile() || checked.isSymbolicLink()) throw new Error('filesystem|input|source is not a regular non-symlink file')
+  hooks.beforeOpen?.(path)
+  const descriptor = openSync(descriptorPath(parent, leaf), constants.O_RDONLY | constants.O_NOFOLLOW)
+  const metadata = fstatSync(descriptor)
+  if (!metadata.isFile() || metadata.dev !== checked.dev || metadata.ino !== checked.ino) { closeSync(descriptor); throw new Error('filesystem|input|identity changed between validation and open') }
+  return { descriptor, parent, leaf, metadata }
+}
+function openFileBelowRoot(rootDescriptor: number, path: string, hooks: ReadHooks = {}): OpenedFile {
+  rawPath(path)
+  const components = path.split('/')
+  const leaf = components.pop()!
+  // A bare /proc/self/fd/N path is a symlink, so duplicate the already-open
+  // root descriptor with identity verification instead of O_NOFOLLOW.
+  let parent = duplicateDirectoryDescriptor(rootDescriptor)
+  try {
+    for (const component of components) {
+      const componentPath = descriptorPath(parent, component)
+      const componentMetadata = lstatSync(componentPath)
+      if (componentMetadata.isSymbolicLink()) throw new Error('filesystem|path|symlink component')
+      const next = openSync(componentPath, noFollowDirectoryFlags)
+      if (!fstatSync(next).isDirectory()) { closeSync(next); throw new Error('filesystem|path|component is not a directory') }
+      closeSync(parent)
+      parent = next
+    }
+    const inputPath = descriptorPath(parent, leaf)
+    const checked = lstatSync(inputPath)
+    if (checked.isSymbolicLink()) throw new Error('filesystem|path|symlink component')
+    if (!checked.isFile()) throw new Error('filesystem|input|source is not a regular non-symlink file')
+    hooks.beforeOpen?.(path)
+    const descriptor = openSync(descriptorPath(parent, leaf), constants.O_RDONLY | constants.O_NOFOLLOW)
+    const metadata = fstatSync(descriptor)
+    if (!metadata.isFile() || metadata.dev !== checked.dev || metadata.ino !== checked.ino) { closeSync(descriptor); throw new Error('filesystem|input|identity changed between validation and open') }
+    return { descriptor, parent, leaf, metadata }
+  } catch (error) { closeSync(parent); throw error }
+}
+function openAnchoredFile(path: string, hooks: ReadHooks = {}): OpenedFile {
+  const absolute = resolve(path)
+  const parent = openAnchoredDirectory(dirname(absolute))
+  return openFileFromParent(parent, basename(absolute), path, hooks)
+}
+
+function readOpenedJson(opened: ReturnType<typeof openAnchoredFile>): OpenedJson {
+  try {
+    const text = readFileSync(opened.descriptor, 'utf8')
+    const afterRead = fstatSync(opened.descriptor)
+    if (afterRead.dev !== opened.metadata.dev || afterRead.ino !== opened.metadata.ino || afterRead.size !== opened.metadata.size) throw new Error('filesystem|input|source changed while being read')
+    return { value: JSON.parse(text), dev: opened.metadata.dev, ino: opened.metadata.ino }
+  } finally { closeSync(opened.descriptor); closeSync(opened.parent) }
+}
+
+function readJsonWithIdentity(path: string, hooks: ReadHooks = {}): OpenedJson {
+  return readOpenedJson(openAnchoredFile(path, hooks))
+}
+export function readJson(path: string, hooks: ReadHooks = {}): unknown {
+  return readJsonWithIdentity(path, hooks).value
 }
 const keyText = (key: RecordKey): string => JSON.stringify([key.source, key.key])
 function sourceFrom(value: unknown): HistoricalContentSource {
@@ -75,7 +163,7 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
   if (!before.isDirectory() || before.isSymbolicLink()) throw new Error('filesystem|parent|authorized parent is not a real directory')
   // Keep the authorized directory object open for the whole transaction. The
   // final hard link is addressed through this descriptor, not a re-resolved path.
-  const parentDescriptor = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+  const parentDescriptor = openAnchoredDirectory(resolve(parent))
   const anchoredParent = fstatSync(parentDescriptor)
   if (!anchoredParent.isDirectory() || anchoredParent.dev !== before.dev || anchoredParent.ino !== before.ino) {
     closeSync(parentDescriptor)
@@ -119,7 +207,10 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
  * authoritative inputs and destinations unchanged instead of exposing a
  * partial set.
  */
-export function publishMultiFile(_destination: string, _files: Readonly<Record<string, string>>): never {
+export function publishMultiFile(destination: string, files: Readonly<Record<string, string>>): never {
+  // Consume the validated request to make explicit that no part of it is written.
+  void destination
+  void files
   throw new Error('filesystem|multi-file-atomicity|directory no-replace publication is unavailable; no files were written')
 }
 export function execute(argv: string[], cwd = process.cwd()): string {
@@ -141,18 +232,24 @@ export function execute(argv: string[], cwd = process.cwd()): string {
   if (new Set(suppliedPaths).size !== suppliedPaths.length) throw new Error('filesystem|provenance|input, history, registry, and output paths must be distinct')
   if (command === 'dry-run' && outputPath) throw new Error('dry-run|output|dry-run cannot create files')
   if (command !== 'dry-run' && !outputPath) throw new Error(usage)
-  const inputFile = confined(cwd, inputPath)
-  const historyFile = historyPath ? confined(cwd, historyPath) : undefined
-  const registryFile = registryPath ? confined(cwd, registryPath) : undefined
-  const physicalFiles = [inputFile, historyFile, registryFile].filter((path): path is string => path !== undefined)
-  const physicalKeys = physicalFiles.map((path) => {
-    const metadata = statSync(path)
-    return `${metadata.dev}:${metadata.ino}`
-  })
-  if (new Set(physicalKeys).size !== physicalKeys.length) throw new Error('filesystem|provenance|input, history, and registry must be physically distinct')
-  const input = parseMigrationInput(readJson(inputFile) as LegacyRecord[])
-  const history = historyFile ? sourceFrom(readJson(historyFile)) : undefined
-  const registry = registryFile ? readJson(registryFile) as Registry : undefined
+  // Resolve and open each role beneath one retained authorized root. Component
+  // traversal is descriptor-relative, and physical provenance is derived from
+  // the descriptors actually opened rather than pathname stat checks.
+  const rootDescriptor = openAnchoredDirectory(resolve(cwd))
+  let input: LegacyRecord[]
+  let history: HistoricalContentSource | undefined
+  let registry: Registry | undefined
+  try {
+    const inputOpened = openFileBelowRoot(rootDescriptor, inputPath)
+    const inputDocument = readOpenedJson(inputOpened)
+    const historyDocument = historyPath ? readOpenedJson(openFileBelowRoot(rootDescriptor, historyPath)) : undefined
+    const registryDocument = registryPath ? readOpenedJson(openFileBelowRoot(rootDescriptor, registryPath)) : undefined
+    const identities = [inputDocument, historyDocument, registryDocument].filter((item): item is OpenedJson => item !== undefined).map((item) => `${item.dev}:${item.ino}`)
+    if (new Set(identities).size !== identities.length) throw new Error('filesystem|provenance|input, history, and registry must be physically distinct')
+    input = parseMigrationInput(inputDocument.value as LegacyRecord[])
+    history = historyDocument ? sourceFrom(historyDocument.value) : undefined
+    registry = registryDocument ? registryDocument.value as Registry : undefined
+  } finally { closeSync(rootDescriptor) }
   const result = runMigration(executionCommand, input, { registry, historicalContentSource: history, dryRun: command === 'dry-run' })
   if (command === 'dry-run') result.command = 'dry-run'
   if (executionCommand === 'generate-identities' && registry) {

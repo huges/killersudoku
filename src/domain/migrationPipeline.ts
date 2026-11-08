@@ -4,10 +4,9 @@ import { canonicalizePlayableContent, extractPlayableContent, fingerprintPlayabl
 import { classifyDuplicate, type DuplicateResult, type HistoricalContentSource, type HistoricalReference } from './duplicateClassifier'
 import { assignIncremental, type AssignmentInput, type Registry, type RecordKey } from './registry'
 import { type PuzzleDefinition } from './types'
-import { validatePuzzle } from './validation'
-import { solve } from './solver'
+import { verifyCatalog } from './catalogPipeline'
 import { readVerifiedDocument, type PublicExport } from './publicBoundary'
-import { SCHEMA_VERSION, type Difficulty, type SaveDocument } from './types'
+import { SCHEMA_VERSION } from './types'
 
 export const MIGRATION_NAMESPACE = 'killer-sudoku' as const
 export const MIGRATION_ALGORITHM = 'd4-v1' as const
@@ -99,10 +98,12 @@ export function parseMigrationInput(value: unknown): LegacyRecord[] {
 }
 
 function candidateOf(record: LegacyRecord): CandidateRecord {
-  validatePuzzle(record.puzzle)
-  const verification = solve(record.puzzle)
-  if (verification.status !== 'unique' || verification.count !== 1 || !verification.complete || !verification.solution) {
-    throw new Error(`solver|${record.recordKey.key}|${verification.status}; count=${verification.count}; complete=${verification.complete}`)
+  // Reuse the M2-1 catalog verifier so migration applies the same structural,
+  // solvability, uniqueness and returned-solution checks as catalog verification.
+  const verification = verifyCatalog([record.puzzle])
+  const checked = verification.puzzles[0]
+  if (verification.errors.length > 0 || !checked || checked.structural !== 'valid' || checked.solver.status !== 'unique' || checked.solver.count !== 1 || !checked.solver.complete) {
+    throw new Error(`solver|${record.recordKey.key}|${verification.errors.join('; ') || 'puzzle did not pass catalog verification'}`)
   }
   const content = extractPlayableContent(record.puzzle)
   return { recordKey: clone(record.recordKey), ...(record.publicId ? { publicId: record.publicId } : {}), aliases: [...(record.aliases ?? [])].sort(compare), legacyFingerprint: record.legacyFingerprint ?? null, content, currentFingerprint: fingerprintPlayableContent(content), versions: Object.fromEntries(Object.entries(record.versions ?? {}).sort(([a], [b]) => compare(a, b))), references: [...(record.references ?? [])].sort(compare) }

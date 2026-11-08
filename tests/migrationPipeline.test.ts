@@ -2,11 +2,12 @@ import { mkdtempSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
+import { partialPuzzle } from '../src/domain/fixtures'
 import { execute, publishMultiFile, readJson, writeExclusive } from '../scripts/migration-command'
 import { parseMigrationInput, runMigration, stableMigrationJson, type LegacyRecord } from '../src/domain/migrationPipeline'
 import { extractPlayableContent } from '../src/domain/identity'
-import { classifyDuplicate, type HistoricalRecord } from '../src/domain/duplicateClassifier'
+import { type HistoricalRecord } from '../src/domain/duplicateClassifier'
+import { loadSample, verifySample } from '../scripts/verify-catalog'
 import { deserializePublicExport, serializePublicExport, type PublicExport } from '../src/domain/publicBoundary'
 import { assignIncremental, createEmptyRegistry, type Registry } from '../src/domain/registry'
 import { newGame } from '../src/domain/game'
@@ -202,7 +203,11 @@ describe('M2-4F migration pipeline', () => {
         content: exportContent,
       },
     }
-    expect(() => parseMigrationInput(technicalSample)).toThrow()
+    const technical = loadSample(process.cwd())
+    expect(technical.puzzles).toEqual(technicalSample)
+    expect(verifySample(process.cwd())).toContain('\"puzzles\"')
+    expect(() => parseMigrationInput(technicalSample)).toThrow('recordKey')
+    // The M2-1 sample and legacy identity-lock remain distinct from complete historical records.
     expect(() => parseMigrationInput(identityLock)).toThrow()
     const imported = parseMigrationInput(documentedExport)
     expect(imported).toHaveLength(1)
@@ -478,6 +483,47 @@ describe('M2-4F migration pipeline', () => {
         .toThrow('multi-file-atomicity')
       expect(readdirSync(destination)).toEqual(['sentinel'])
       expect(readFileSync(join(destination, 'sentinel'), 'utf8')).toBe('unchanged')
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('reads from the originally opened parent when an ancestor pathname is replaced during input open', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-ancestor-read-race-'))
+    try {
+      const parent = join(root, 'parent')
+      const moved = join(root, 'moved')
+      const replacement = join(root, 'replacement')
+      mkdirSync(parent)
+      mkdirSync(replacement)
+      writeFileSync(join(parent, 'input.json'), JSON.stringify({ source: 'authorized' }))
+      writeFileSync(join(replacement, 'input.json'), JSON.stringify({ source: 'redirected' }))
+      expect(readJson(join(parent, 'input.json'), {
+        beforeOpen: () => {
+          renameSync(parent, moved)
+          symlinkSync(replacement, parent, 'dir')
+        },
+      })).toEqual({ source: 'authorized' })
+      expect(readFileSync(join(replacement, 'input.json'), 'utf8')).toContain('redirected')
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('refuses publication when an ancestor of the anchored parent is replaced', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-ancestor-publish-race-'))
+    try {
+      const ancestor = join(root, 'ancestor')
+      const movedAncestor = join(root, 'moved-ancestor')
+      const replacement = join(root, 'replacement-ancestor')
+      const parent = join(ancestor, 'parent')
+      mkdirSync(parent, { recursive: true })
+      mkdirSync(join(replacement, 'parent'), { recursive: true })
+      expect(() => writeExclusive(join(parent, 'candidate.json'), '{}', {
+        afterStagingCreated: () => {
+          renameSync(ancestor, movedAncestor)
+          symlinkSync(replacement, ancestor, 'dir')
+        },
+      })).toThrow()
+      expect(existsSync(join(movedAncestor, 'parent', 'candidate.json'))).toBe(false)
+      expect(existsSync(join(replacement, 'parent', 'candidate.json'))).toBe(false)
+      expect(readdirSync(join(movedAncestor, 'parent'))).toEqual([])
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 })
