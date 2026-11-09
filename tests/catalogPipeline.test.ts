@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, symlinkSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, symlinkSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -213,4 +213,23 @@ describe('offline catalog pipeline', () => {
     expect(pkg.scripts.build.startsWith('npm run verify:catalog &&')).toBe(true)
     expect(() => verifySample(root)).not.toThrow()
   })
+  it('retains legacy absolute paths inside the sandbox but never escapes or follows symlink parents', () => {
+    const dir = sandbox()
+    const outside = mkdtempSync(join(tmpdir(), 'catalog-legacy-external-'))
+    temps.push(outside)
+    mkdirSync(join(dir, 'approved'))
+    symlinkSync(outside, join(dir, 'redirect'), 'dir')
+    for (const command of ['update-catalog-reference', 'register-catalog-identities']) {
+      const within = join(dir, 'approved', command + '.json')
+      expect(cli(command, dir, ['--output', within]).status).toBe(0)
+      const before = readFileSync(within, 'utf8')
+      expect(cli(command, dir, ['--output', within]).status).not.toBe(0)
+      expect(readFileSync(within, 'utf8')).toBe(before)
+      expect(cli(command, dir, ['--output', join(outside, command + '.json')]).status).not.toBe(0)
+      expect(cli(command, dir, ['--output', 'redirect/' + command + '.json']).status).not.toBe(0)
+      expect(cli(command, dir, ['--output', 'catalog/fixtures/../escape.json']).status).not.toBe(0)
+      expect(existsSync(join(outside, command + '.json'))).toBe(false)
+    }
+  })
+
 })
