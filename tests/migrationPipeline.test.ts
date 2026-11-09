@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { partialPuzzle } from '../src/domain/fixtures'
-import { execute, publishMultiFile, readJson, writeExclusive } from '../scripts/migration-command'
+import { execute, readJson, writeExclusive } from '../scripts/migration-command'
 import { parseMigrationInput, runMigration, stableMigrationJson, type LegacyRecord } from '../src/domain/migrationPipeline'
 import { extractPlayableContent } from '../src/domain/identity'
 import { type HistoricalRecord } from '../src/domain/duplicateClassifier'
@@ -473,17 +473,31 @@ describe('M2-4F migration pipeline', () => {
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('fails closed for multi-file publication without creating or changing candidates', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-multi-file-'))
+  it('publishes one complete report and refuses both multi-file output and overwrite', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mozart-migration-single-artifact-'))
     try {
-      const destination = join(root, 'destination')
-      mkdirSync(destination)
-      writeFileSync(join(destination, 'sentinel'), 'unchanged')
-      expect(() => publishMultiFile(destination, { 'report.json': '{}', 'candidate.json': '{}' }))
-        .toThrow('multi-file-atomicity')
-      expect(readdirSync(destination)).toEqual(['sentinel'])
-      expect(readFileSync(join(destination, 'sentinel'), 'utf8')).toBe('unchanged')
+      writeFileSync(join(root, 'input.json'), JSON.stringify([record('one-artifact')]))
+      const args = ['migrate', '--input', 'input.json', '--output', 'result.json']
+      const text = execute(args, root)
+      const report = JSON.parse(text)
+      expect(Object.keys(report)).toEqual(['candidate', 'command', 'diagnostics', 'diff', 'records'])
+      expect(readFileSync(join(root, 'result.json'), 'utf8')).toBe(text)
+      expect(readdirSync(root).sort()).toEqual(['input.json', 'result.json'])
+      expect(() => execute(args, root)).toThrow()
+      expect(readFileSync(join(root, 'result.json'), 'utf8')).toBe(text)
+      expect(() => execute(['migrate', '--input', 'input.json', '--output-dir', 'result-dir'], root)).toThrow()
+      expect(existsSync(join(root, 'result-dir'))).toBe(false)
     } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('canonicalizes nested registry and diagnostic property order, not just record order', () => {
+    const left = runMigration('migrate', [record('canonical')])
+    const right = structuredClone(left)
+    left.diff = [{ registry: { z: 7, a: { z: 2, a: 1 } } }]
+    right.diff = [{ registry: { a: { a: 1, z: 2 }, z: 7 } }]
+    left.diagnostics = [{ code: 'test', path: 'record', message: 'same' }]
+    right.diagnostics = [{ message: 'same', path: 'record', code: 'test' }]
+    expect(stableMigrationJson(left)).toBe(stableMigrationJson(right))
   })
 
   it('reads from the originally opened parent when an ancestor pathname is replaced during input open', () => {

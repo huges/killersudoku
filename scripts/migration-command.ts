@@ -199,19 +199,17 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
   }
 }
 
-/**
- * Refuse multi-file publication unless the runtime supplies a true directory
- * no-replace primitive. Node's rename replaces an empty destination directory
- * on some platforms, so a pre-check followed by rename cannot prove the
- * required all-or-nothing/no-replace contract. Failing before staging keeps
- * authoritative inputs and destinations unchanged instead of exposing a
- * partial set.
- */
-export function publishMultiFile(destination: string, files: Readonly<Record<string, string>>): never {
-  // Consume the validated request to make explicit that no part of it is written.
-  void destination
-  void files
-  throw new Error('filesystem|multi-file-atomicity|directory no-replace publication is unavailable; no files were written')
+/** Legacy single-file outputs may use an absolute path, but only below the authorized cwd.
+ * Modern migration arguments remain strictly root-relative. Both paths reuse the
+ * descriptor-anchored, exclusive single-file writer; no alternative publisher. */
+export function writeLegacyCandidate(cwd: string, output: string, text: string): void {
+  const absolute = isAbsolute(output)
+  if (!output || output.includes('\\0') || output.includes('\\\\') || /^[A-Za-z]:/.test(output)
+    || output.split('/').some((part, index) => part === '.' || part === '..' || (part === '' && !(absolute && index === 0)))) {
+    throw new Error('filesystem|path|unauthorized raw path')
+  }
+  const relativeOutput = absolute ? relative(resolve(cwd), output) : output
+  writeExclusive(confined(cwd, relativeOutput), text)
 }
 export function execute(argv: string[], cwd = process.cwd()): string {
   const command = argv[0] as MigrationCommand

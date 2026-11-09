@@ -40,7 +40,10 @@ const clone = <T>(value: T): T => structuredClone(value)
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0
 const keyText = (key: RecordKey): string => JSON.stringify([key.source, key.key])
 const diagnostic = (code: string, path: string, message: string, recordKey?: RecordKey): MigrationDiagnostic => ({ code, path, ...(recordKey ? { recordKey: clone(recordKey) } : {}), message })
-const stableJson = (value: unknown): string => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort(compare).map((key) => [key, item[key]])) : item)
+const sortObjectKeys = (_key: string, item: unknown): unknown => item && typeof item === 'object' && !Array.isArray(item)
+  ? Object.fromEntries(Object.keys(item).sort(compare).map((key) => [key, (item as Record<string, unknown>)[key]]))
+  : item
+const stableJson = (value: unknown): string => JSON.stringify(value, sortObjectKeys)
 
 function puzzleFromPublicExport(document: PublicExport): LegacyRecord {
   const content = document.record.content
@@ -240,7 +243,7 @@ export function generateIdentityCandidate(previous: Registry, records: readonly 
 }
 
 export function stableMigrationJson(result: MigrationResult): string {
-  return `${JSON.stringify(result, null, 2)}\n`
+  return `${JSON.stringify(result, sortObjectKeys, 2)}\n`
 }
 
 export function readMigrationJson(path: string): unknown {

@@ -1,8 +1,7 @@
-import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { calculateSample } from './verify-catalog'
-import { execute as executeMigration } from './migration-command'
+import { execute as executeMigration, writeLegacyCandidate } from './migration-command'
 
 /** Retain the M2-1 identity-lock workflow and expose the M2-4F Registry candidate workflow. */
 export function runRegisterCatalogIdentities(args: string[], cwd = process.cwd()): string | void {
@@ -20,7 +19,7 @@ export function runRegisterCatalogIdentities(args: string[], cwd = process.cwd()
   }
   // The legacy lock remains a puzzleId/fingerprint map; it is never promoted to Registry v1.
   const ordered = Object.fromEntries(Object.entries(identity).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))
-  writeFileSync(resolve(cwd, args[1]), `${JSON.stringify(ordered, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
+  writeLegacyCandidate(cwd, args[1], `${JSON.stringify(ordered, null, 2)}\n`)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
