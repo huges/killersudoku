@@ -204,7 +204,7 @@ export function writeExclusive(path: string, text: string, hooks: PublicationHoo
  * descriptor-anchored, exclusive single-file writer; no alternative publisher. */
 export function writeLegacyCandidate(cwd: string, output: string, text: string): void {
   const absolute = isAbsolute(output)
-  if (!output || output.includes('\\0') || output.includes('\\\\') || /^[A-Za-z]:/.test(output)
+  if (!output || output.includes('\0') || output.includes('\\') || /^[A-Za-z]:/.test(output)
     || output.split('/').some((part, index) => part === '.' || part === '..' || (part === '' && !(absolute && index === 0)))) {
     throw new Error('filesystem|path|unauthorized raw path')
   }
