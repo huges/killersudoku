@@ -79,3 +79,13 @@ anche nelle fasi separate del runner Mozart ufficiale. Gli script CLI sono
 coperti da lint e TypeScript. Il campione non completa M2 e non rappresenta i
 18 puzzle finali né una classificazione della difficoltà umana.
 Procedure, limiti e comandi candidati: `docs/M2-1-pipeline-catalogo.md`.
+
+## M2-4G — Adozione controllata di un candidato M2-4F
+
+La CLI `npm run adopt -- --candidate candidate.json --input input.json --registry registry.json --history history.json --output out.json --confirm` pubblica **un solo** documento candidato già prodotto dalla pipeline M2-4F. Il candidato deve avere una modalità persistente riconosciuta (`migrate`, `generate-catalog`, `generate-identities` o `generate-references`), contenere almeno un candidato verificabile e non riportare diagnostiche bloccanti; i report `dry-run` privi dell'attestazione del mode non sono adottabili.
+
+`--input` contiene i record legacy originali, `--registry` il Registry v1 autorevole e `--history` una fonte storica indipendente: sono obbligatori e vengono letti senza modifiche. La sola presenza di file distinti non ne prova la provenienza; è responsabilità dell'operatore verificare completezza, indipendenza cronologica e autorizzazione delle sorgenti **prima** di `--confirm`. Il comando ricalcola il report in memoria tramite M2-4F e confronta l'intero JSON canonico, con una seconda classificazione read-only per non eludere i controlli storici in modalità `migrate`. Poiché M2-4F ammette `migrate` sia con che senza Registry, la riverifica confronta esattamente le due forme supportate (con Registry/storia oppure solo `--input`), ma non elimina mai il gate storico indipendente.
+
+`--output` deve essere esplicito, nuovo, sotto la radice autorizzata ed esterno a cataloghi, registry, fixture, sorgenti e altri file autorevoli. Sono vietati traversal, symlink e riutilizzo di percorsi già esistenti. La scrittura usa il publisher M2-4F `writeExclusive` con staging verificato e hard-link atomico **no-replace**; in caso di errore non sostituisce file precedenti. Nessun comando `adopt` modifica input, storia, Registry, identity-lock, cataloghi o fixture; non pubblica soluzioni o stato di gioco.
+
+**Governance:** l'adozione reale richiede autorizzazione umana esplicita. I chiarimenti sui nuovi input di riverifica e sul publisher costituiscono la proposta di contratto M2-4G v2: gli artifact approvati v1 della delivery Mozart #234 restano immodificati e il checkpoint non può essere trattato come conforme alla v2 senza un gate di approvazione coerente.

@@ -16,6 +16,7 @@
     "catalog:update-reference": "node --import tsx scripts/update-catalog-reference.ts",
     "catalog:register-identities": "node --import tsx scripts/register-catalog-identities.ts",
     "migration": "node --import tsx scripts/migration-command.ts",
+    "adopt": "node --import tsx scripts/adopt-command.ts",
     "build": "npm run verify:catalog && npm run typecheck && vite build --config vite.config.ts"
   },
   "dependencies": {
