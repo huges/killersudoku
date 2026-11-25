@@ -387,5 +387,9 @@ describe('playable content identity', () => {
     expectValid(distinctOrbit)
     expect(arePlayableContentsD4Equivalent(original, sameOrbit)).toBe(true)
     expect(arePlayableContentsD4Equivalent(original, distinctOrbit)).toBe(false)
+
+    const rotated = transformPlayableContent(original, 'rotate90')
+    expect(arePlayableContentsD4Equivalent(original, rotated)).toBe(true)
+    expect(fingerprintPlayableContent(original)).not.toBe(fingerprintPlayableContent(rotated))
   })
 })
