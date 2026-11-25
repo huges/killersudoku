@@ -5,6 +5,7 @@ import { resolve, join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { partialPuzzle, solvedPuzzle } from '../src/domain/fixtures'
 import { canonicalizePuzzle, compareReference, fingerprintPuzzle, verifyCatalog } from '../src/domain/catalogPipeline'
+import { extractPlayableContent, fingerprintPlayableContent } from '../src/domain/identity'
 import { validatePuzzle } from '../src/domain/validation'
 import { type PuzzleDefinition } from '../src/domain/types'
 import * as solver from '../src/domain/solver'
@@ -85,6 +86,18 @@ describe('offline catalog pipeline', () => {
     expect(hash).toMatch(/^sha256-[0-9a-f]{64}$/)
     expect(fingerprintPuzzle(canonicalizePuzzle(changed))).not.toBe(hash)
     expect(verifyCatalog([changed], { identity: { [p.puzzleId]: hash } }).errors.join()).toMatch(/historical/)
+
+    const editorialChange = clone(p); editorialChange.difficulty = 'expert'
+    expect(fingerprintPuzzle(canonicalizePuzzle(editorialChange))).not.toBe(hash)
+    expect(fingerprintPlayableContent(extractPlayableContent(editorialChange))).toBe(
+      fingerprintPlayableContent(extractPlayableContent(p)),
+    )
+    const editorialPuzzleId = clone(p); editorialPuzzleId.puzzleId = 'different-public-id'
+    expect(fingerprintPuzzle(canonicalizePuzzle(editorialPuzzleId))).not.toBe(hash)
+    expect(fingerprintPlayableContent(extractPlayableContent(editorialPuzzleId))).toBe(
+      fingerprintPlayableContent(extractPlayableContent(p)),
+    )
+
     const reversed = clone(p); reversed.cages.reverse()
     expect(canonicalizePuzzle(reversed)).toBe(canonicalizePuzzle(p))
     const other = clone(p); other.puzzleId = 'A'
